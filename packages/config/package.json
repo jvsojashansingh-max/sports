@@ -1,0 +1,11 @@
+{
+  "name": "@sports/config",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "build": "echo \"config build pending\"",
+    "lint": "echo \"config lint pending\"",
+    "typecheck": "echo \"config typecheck pending\"",
+    "test": "echo \"config tests pending\""
+  }
+}

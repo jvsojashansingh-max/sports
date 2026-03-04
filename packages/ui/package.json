@@ -1,0 +1,11 @@
+{
+  "name": "@sports/ui",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "build": "echo \"ui build pending\"",
+    "lint": "echo \"ui lint pending\"",
+    "typecheck": "echo \"ui typecheck pending\"",
+    "test": "echo \"ui tests pending\""
+  }
+}

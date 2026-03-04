@@ -1,0 +1,23 @@
+{
+  "name": "@sports/worker",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "lint": "echo \"worker lint pending\"",
+    "typecheck": "tsc --noEmit",
+    "test": "echo \"worker tests pending\""
+  },
+  "dependencies": {
+    "@prisma/client": "6.4.1",
+    "bullmq": "5.41.3",
+    "ioredis": "5.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.13.9",
+    "tsx": "4.19.3",
+    "typescript": "5.8.2"
+  }
+}

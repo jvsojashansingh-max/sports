@@ -1,0 +1,789 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  PLAYER
+  VENDOR_OWNER
+  VENDOR_STAFF
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  BANNED
+  PENDING
+}
+
+enum IdentityProvider {
+  PHONE_OTP
+  GOOGLE
+}
+
+enum VendorStatus {
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum VenueStatus {
+  DRAFT
+  LIVE
+  SUSPENDED
+}
+
+enum PaymentMode {
+  PAY_ON_SPOT
+  VENDOR_QR
+  VENDOR_LINK
+}
+
+enum SportId {
+  BADMINTON
+  PICKLEBALL
+  TENNIS
+  BASKETBALL
+  TABLE_TENNIS
+}
+
+enum ResourceStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum BookingType {
+  CHALLENGE
+  TOURNAMENT
+  CASUAL
+}
+
+enum BookingStatus {
+  HELD
+  WAITING_OPPONENT
+  CONFIRMED
+  CHECKIN_OPEN
+  IN_PROGRESS
+  RESULT_PENDING
+  COMPLETED
+  CANCELLED
+}
+
+enum ChallengeStatus {
+  WAITING_OPPONENT
+  OPPONENT_REQUESTED
+  CONFIRMED
+  CANCELLED
+  CLOSED
+}
+
+enum PaymentStatus {
+  UNKNOWN
+  PAID
+  UNPAID
+}
+
+enum TeamSide {
+  A
+  B
+}
+
+enum TeamMemberStatus {
+  INVITED
+  ACCEPTED
+  REMOVED
+}
+
+enum MatchStatus {
+  SCHEDULED
+  CHECKIN_OPEN
+  IN_PROGRESS
+  RESULT_PENDING
+  DISPUTED
+  SETTLED
+  FORFEIT
+  CANCELLED
+}
+
+enum ConversationType {
+  CHALLENGE
+  TOURNAMENT
+  VENUE_SUPPORT
+}
+
+enum ConversationStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum ChatRole {
+  MEMBER
+  MODERATOR
+}
+
+enum MessageStatus {
+  SENT
+  DELETED_BY_MOD
+  DELETED_BY_USER
+}
+
+enum DisputeStatus {
+  OPEN
+  RESOLVED
+  ESCALATED
+}
+
+enum MessageReportStatus {
+  OPEN
+  ACTIONED
+  DISMISSED
+}
+
+enum LeaderboardScope {
+  CITY
+  STATE
+  ALL
+}
+
+enum LeaderboardWindow {
+  WEEKLY
+  MONTHLY
+  ALL_TIME
+}
+
+enum ReviewType {
+  VENUE
+  PLAYER
+}
+
+enum TournamentFormatType {
+  SINGLE_ELIM
+}
+
+enum TournamentStatus {
+  DRAFT
+  REG_OPEN
+  REG_CLOSED
+  LIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum TournamentEntryStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+}
+
+model User {
+  id            String         @id @default(uuid()) @db.Uuid
+  role          UserRole       @default(PLAYER)
+  status        UserStatus     @default(ACTIVE)
+  defaultCityId String?        @db.Uuid
+  displayName   String?
+  avatarUrl     String?
+  dob           DateTime?
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+  deletedAt     DateTime?      @map("deleted_at")
+  rowVersion    Int            @default(1) @map("row_version")
+  identities    UserIdentity[]
+  sessions      Session[]
+  ownedVendors  Vendor[]       @relation("vendor_owner")
+
+  @@index([role, defaultCityId], map: "idx_users_city")
+  @@index([status], map: "idx_users_status")
+  @@map("users")
+}
+
+model UserIdentity {
+  id              String           @id @default(uuid()) @db.Uuid
+  userId          String           @map("user_id") @db.Uuid
+  provider        IdentityProvider
+  providerSubject String           @map("provider_subject")
+  email           String?
+  isPrimary       Boolean          @default(false) @map("is_primary")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  deletedAt       DateTime?        @map("deleted_at")
+  rowVersion      Int              @default(1) @map("row_version")
+  user            User             @relation(fields: [userId], references: [id])
+
+  @@unique([provider, providerSubject])
+  @@index([userId], map: "idx_user_identities_user")
+  @@map("user_identities")
+}
+
+model Session {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  refreshTokenHash String    @map("refresh_token_hash")
+  deviceId         String    @map("device_id")
+  ip               String?
+  userAgent        String?   @map("user_agent")
+  revokedAt        DateTime? @map("revoked_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  deletedAt        DateTime? @map("deleted_at")
+  rowVersion       Int       @default(1) @map("row_version")
+  user             User      @relation(fields: [userId], references: [id])
+
+  @@index([userId, revokedAt], map: "idx_sessions_user")
+  @@index([deviceId], map: "idx_sessions_device")
+  @@map("sessions")
+}
+
+model AuditLog {
+  id          String    @id @default(uuid()) @db.Uuid
+  actorUserId String?   @map("actor_user_id") @db.Uuid
+  action      String
+  objectType  String    @map("object_type")
+  objectId    String    @map("object_id") @db.Uuid
+  beforeJson  Json?     @map("before_json")
+  afterJson   Json?     @map("after_json")
+  ip          String?
+  deviceId    String?   @map("device_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@index([objectType, objectId, createdAt(sort: Desc)], map: "idx_audit_object")
+  @@index([actorUserId, createdAt(sort: Desc)], map: "idx_audit_actor")
+  @@map("audit_logs")
+}
+
+model IdempotencyKey {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  endpoint     String
+  key          String
+  requestHash  String   @map("request_hash")
+  responseJson Json?    @map("response_json")
+  createdAt    DateTime @default(now()) @map("created_at")
+  expiresAt    DateTime @map("expires_at")
+
+  @@unique([userId, endpoint, key])
+  @@map("idempotency_keys")
+}
+
+model OtpRequest {
+  id          String    @id @default(uuid()) @db.Uuid
+  phone       String
+  otpHash     String    @map("otp_hash")
+  expiresAt   DateTime  @map("expires_at")
+  consumedAt  DateTime? @map("consumed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@index([phone, createdAt(sort: Desc)], map: "idx_otp_phone_recent")
+  @@index([expiresAt], map: "idx_otp_expires_at")
+  @@map("otp_requests")
+}
+
+model Vendor {
+  id          String       @id @default(uuid()) @db.Uuid
+  ownerUserId String       @map("owner_user_id") @db.Uuid
+  status      VendorStatus @default(PENDING_APPROVAL)
+  approvedAt  DateTime?    @map("approved_at")
+  businessName String      @map("business_name")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+  deletedAt   DateTime?    @map("deleted_at")
+  rowVersion  Int          @default(1) @map("row_version")
+  owner       User         @relation("vendor_owner", fields: [ownerUserId], references: [id])
+  venues      Venue[]
+  formats     Format[]
+
+  @@index([status], map: "idx_vendors_status")
+  @@index([ownerUserId], map: "idx_vendors_owner")
+  @@map("vendors")
+}
+
+model Venue {
+  id                 String      @id @default(uuid()) @db.Uuid
+  vendorId           String      @map("vendor_id") @db.Uuid
+  name               String
+  cityId             String      @map("city_id") @db.Uuid
+  stateId            String      @map("state_id") @db.Uuid
+  address            String
+  lat                Float?
+  lng                Float?
+  photos             Json?
+  status             VenueStatus @default(DRAFT)
+  paymentInstructions String?    @map("payment_instructions")
+  paymentMode        PaymentMode @default(PAY_ON_SPOT) @map("payment_mode")
+  vendorPaymentLink  String?     @map("vendor_payment_link")
+  createdAt          DateTime    @default(now()) @map("created_at")
+  updatedAt          DateTime    @updatedAt @map("updated_at")
+  deletedAt          DateTime?   @map("deleted_at")
+  rowVersion         Int         @default(1) @map("row_version")
+  vendor             Vendor      @relation(fields: [vendorId], references: [id])
+  resources          Resource[]
+  tournaments        Tournament[]
+
+  @@index([cityId, status], map: "idx_venues_city")
+  @@index([vendorId], map: "idx_venues_vendor")
+  @@map("venues")
+}
+
+model Resource {
+  id         String         @id @default(uuid()) @db.Uuid
+  venueId    String         @map("venue_id") @db.Uuid
+  sportId    SportId        @map("sport_id")
+  name       String
+  capacity   Int
+  status     ResourceStatus @default(ACTIVE)
+  createdAt  DateTime       @default(now()) @map("created_at")
+  updatedAt  DateTime       @updatedAt @map("updated_at")
+  deletedAt  DateTime?      @map("deleted_at")
+  rowVersion Int            @default(1) @map("row_version")
+  venue      Venue          @relation(fields: [venueId], references: [id])
+  availabilityTemplates AvailabilityTemplate[]
+  blocks     Block[]
+  bookings   Booking[]
+
+  @@index([venueId, sportId], map: "idx_resources_venue")
+  @@map("resources")
+}
+
+model AvailabilityTemplate {
+  id            String   @id @default(uuid()) @db.Uuid
+  resourceId    String   @map("resource_id") @db.Uuid
+  dayOfWeek     Int      @map("day_of_week")
+  startMinute   Int      @map("start_minute")
+  endMinute     Int      @map("end_minute")
+  slotMinutes   Int      @map("slot_minutes")
+  bufferMinutes Int      @map("buffer_minutes")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+  rowVersion    Int      @default(1) @map("row_version")
+  resource      Resource @relation(fields: [resourceId], references: [id])
+
+  @@index([resourceId, dayOfWeek], map: "idx_availability_resource")
+  @@map("availability_templates")
+}
+
+model Block {
+  id              String   @id @default(uuid()) @db.Uuid
+  resourceId      String   @map("resource_id") @db.Uuid
+  startTs         DateTime @map("start_ts")
+  endTs           DateTime @map("end_ts")
+  reason          String
+  createdByUserId String   @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
+  rowVersion      Int      @default(1) @map("row_version")
+  resource        Resource @relation(fields: [resourceId], references: [id])
+
+  @@index([resourceId, startTs], map: "idx_blocks_resource")
+  @@map("blocks")
+}
+
+model Booking {
+  id             String        @id @default(uuid()) @db.Uuid
+  resourceId     String        @map("resource_id") @db.Uuid
+  startTs        DateTime      @map("start_ts")
+  endTs          DateTime      @map("end_ts")
+  type           BookingType
+  status         BookingStatus
+  createdByUserId String       @map("created_by_user_id") @db.Uuid
+  holdExpiresAt  DateTime?     @map("hold_expires_at")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+  deletedAt      DateTime?     @map("deleted_at")
+  rowVersion     Int           @default(1) @map("row_version")
+  resource       Resource      @relation(fields: [resourceId], references: [id])
+  challenge      Challenge?
+
+  @@index([resourceId, startTs], map: "idx_bookings_resource_time")
+  @@index([status, startTs], map: "idx_bookings_status")
+  @@map("bookings")
+}
+
+model Format {
+  id                  String   @id @default(uuid()) @db.Uuid
+  vendorId            String?  @map("vendor_id") @db.Uuid
+  sportId             SportId  @map("sport_id")
+  name                String
+  teamSize            Int      @map("team_size")
+  durationMinutes     Int      @map("duration_minutes")
+  rulesText           String   @map("rules_text")
+  refereeAllowed      Boolean  @default(false) @map("referee_allowed")
+  refereeFeeDisplay   String?  @map("referee_fee_display")
+  joinDeadlineMinutes Int      @default(180) @map("join_deadline_minutes")
+  checkinOpenMinutes  Int      @default(30) @map("checkin_open_minutes")
+  noShowGraceMinutes  Int      @map("no_show_grace_minutes")
+  enabled             Boolean  @default(true)
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+  deletedAt           DateTime? @map("deleted_at")
+  rowVersion          Int      @default(1) @map("row_version")
+  vendor              Vendor?  @relation(fields: [vendorId], references: [id])
+  challenges          Challenge[]
+
+  @@index([vendorId, sportId, enabled], map: "idx_formats_vendor")
+  @@map("formats")
+}
+
+model Challenge {
+  id             String          @id @default(uuid()) @db.Uuid
+  bookingId      String          @unique @map("booking_id") @db.Uuid
+  sportId        SportId         @map("sport_id")
+  formatId       String          @map("format_id") @db.Uuid
+  status         ChallengeStatus
+  joinDeadlineTs DateTime        @map("join_deadline_ts")
+  checkinOpenTs  DateTime        @map("checkin_open_ts")
+  paymentStatus  PaymentStatus   @default(UNKNOWN) @map("payment_status")
+  createdByUserId String         @map("created_by_user_id") @db.Uuid
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  deletedAt      DateTime?       @map("deleted_at")
+  rowVersion     Int             @default(1) @map("row_version")
+  booking        Booking         @relation(fields: [bookingId], references: [id])
+  format         Format          @relation(fields: [formatId], references: [id])
+  teams          Team[]
+  match          Match?
+  conversation   Conversation?
+
+  @@index([status, joinDeadlineTs], map: "idx_challenges_feed")
+  @@index([status, sportId], map: "idx_challenges_city_sport")
+  @@map("challenges")
+}
+
+model Team {
+  id            String   @id @default(uuid()) @db.Uuid
+  challengeId   String   @map("challenge_id") @db.Uuid
+  side          TeamSide
+  captainUserId String   @map("captain_user_id") @db.Uuid
+  isOpenFill    Boolean  @default(false) @map("is_open_fill")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+  rowVersion    Int      @default(1) @map("row_version")
+  challenge     Challenge @relation(fields: [challengeId], references: [id])
+  members       TeamMember[]
+
+  @@unique([challengeId, side])
+  @@index([captainUserId], map: "idx_teams_captain")
+  @@map("teams")
+}
+
+model TeamMember {
+  id         String           @id @default(uuid()) @db.Uuid
+  teamId      String          @map("team_id") @db.Uuid
+  userId      String          @map("user_id") @db.Uuid
+  status      TeamMemberStatus
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+  deletedAt   DateTime?       @map("deleted_at")
+  rowVersion  Int             @default(1) @map("row_version")
+  team        Team            @relation(fields: [teamId], references: [id])
+
+  @@unique([teamId, userId])
+  @@index([userId], map: "idx_team_members_user")
+  @@map("team_members")
+}
+
+model Match {
+  id                     String      @id @default(uuid()) @db.Uuid
+  challengeId            String?     @unique @map("challenge_id") @db.Uuid
+  tournamentMatchId      String?     @unique @map("tournament_match_id") @db.Uuid
+  status                 MatchStatus
+  startedAt              DateTime?   @map("started_at")
+  endedAt                DateTime?   @map("ended_at")
+  vendorConfirmedByUserId String?    @map("vendor_confirmed_by_user_id") @db.Uuid
+  createdAt              DateTime    @default(now()) @map("created_at")
+  updatedAt              DateTime    @updatedAt @map("updated_at")
+  deletedAt              DateTime?   @map("deleted_at")
+  rowVersion             Int         @default(1) @map("row_version")
+  challenge              Challenge?  @relation(fields: [challengeId], references: [id])
+  checkins               MatchCheckin[]
+  results                MatchResult[]
+  dispute                Dispute?
+  reviews                Review[]
+
+  @@index([status, endedAt], map: "idx_matches_status")
+  @@map("matches")
+}
+
+model MatchCheckin {
+  id               String   @id @default(uuid()) @db.Uuid
+  matchId          String   @map("match_id") @db.Uuid
+  side             TeamSide
+  present          Boolean
+  checkedInAt      DateTime? @map("checked_in_at")
+  checkedInByUserId String   @map("checked_in_by_user_id") @db.Uuid
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  deletedAt        DateTime? @map("deleted_at")
+  rowVersion       Int       @default(1) @map("row_version")
+  match            Match     @relation(fields: [matchId], references: [id])
+
+  @@unique([matchId, side])
+  @@index([matchId], map: "idx_match_checkins_match")
+  @@map("match_checkins")
+}
+
+model Conversation {
+  id               String             @id @default(uuid()) @db.Uuid
+  type             ConversationType
+  challengeId      String?            @unique @map("challenge_id") @db.Uuid
+  tournamentId     String?            @map("tournament_id") @db.Uuid
+  venueId          String?            @map("venue_id") @db.Uuid
+  createdByUserId  String             @map("created_by_user_id") @db.Uuid
+  status           ConversationStatus @default(ACTIVE)
+  createdAt        DateTime           @default(now()) @map("created_at")
+  updatedAt        DateTime           @updatedAt @map("updated_at")
+  deletedAt        DateTime?          @map("deleted_at")
+  rowVersion       Int                @default(1) @map("row_version")
+  challenge        Challenge?         @relation(fields: [challengeId], references: [id])
+  tournament       Tournament?        @relation(fields: [tournamentId], references: [id])
+  participants     ConversationParticipant[]
+  messages         Message[]
+
+  @@index([type, status], map: "idx_conversations_type")
+  @@map("conversations")
+}
+
+model ConversationParticipant {
+  id                String     @id @default(uuid()) @db.Uuid
+  conversationId    String     @map("conversation_id") @db.Uuid
+  userId            String     @map("user_id") @db.Uuid
+  roleInChat        ChatRole   @default(MEMBER) @map("role_in_chat")
+  mutedUntil        DateTime?  @map("muted_until")
+  lastReadMessageId String?    @map("last_read_message_id") @db.Uuid
+  createdAt         DateTime   @default(now()) @map("created_at")
+  updatedAt         DateTime   @updatedAt @map("updated_at")
+  deletedAt         DateTime?  @map("deleted_at")
+  rowVersion        Int        @default(1) @map("row_version")
+  conversation      Conversation @relation(fields: [conversationId], references: [id])
+
+  @@unique([conversationId, userId])
+  @@index([userId], map: "idx_participants_user")
+  @@map("conversation_participants")
+}
+
+model Message {
+  id           String        @id @default(uuid()) @db.Uuid
+  conversationId String      @map("conversation_id") @db.Uuid
+  senderUserId String        @map("sender_user_id") @db.Uuid
+  body         String
+  attachments  Json?
+  status       MessageStatus @default(SENT)
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+  deletedAt    DateTime?     @map("deleted_at")
+  rowVersion   Int           @default(1) @map("row_version")
+  conversation Conversation  @relation(fields: [conversationId], references: [id])
+  reports      MessageReport[]
+
+  @@index([conversationId, createdAt], map: "idx_messages_conversation")
+  @@index([senderUserId, createdAt], map: "idx_messages_sender")
+  @@map("messages")
+}
+
+model MatchResult {
+  id                 String   @id @default(uuid()) @db.Uuid
+  matchId            String   @map("match_id") @db.Uuid
+  submittedByUserId  String   @map("submitted_by_user_id") @db.Uuid
+  winnerSide         TeamSide @map("winner_side")
+  scoreJson          Json?    @map("score_json")
+  submittedAt        DateTime @default(now()) @map("submitted_at")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+  deletedAt          DateTime? @map("deleted_at")
+  rowVersion         Int      @default(1) @map("row_version")
+  match              Match    @relation(fields: [matchId], references: [id])
+
+  @@unique([matchId, submittedByUserId])
+  @@index([matchId], map: "idx_match_results_match")
+  @@map("match_results")
+}
+
+model Dispute {
+  id              String       @id @default(uuid()) @db.Uuid
+  matchId         String       @unique @map("match_id") @db.Uuid
+  status          DisputeStatus
+  reason          String
+  resolvedByUserId String?     @map("resolved_by_user_id") @db.Uuid
+  resolutionJson  Json?        @map("resolution_json")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+  deletedAt       DateTime?    @map("deleted_at")
+  rowVersion      Int          @default(1) @map("row_version")
+  match           Match        @relation(fields: [matchId], references: [id])
+
+  @@index([status, createdAt], map: "idx_disputes_status")
+  @@map("disputes")
+}
+
+model MessageReport {
+  id               String             @id @default(uuid()) @db.Uuid
+  messageId        String             @map("message_id") @db.Uuid
+  reportedByUserId String             @map("reported_by_user_id") @db.Uuid
+  reason           String
+  status           MessageReportStatus @default(OPEN)
+  createdAt        DateTime           @default(now()) @map("created_at")
+  updatedAt        DateTime           @updatedAt @map("updated_at")
+  deletedAt        DateTime?          @map("deleted_at")
+  rowVersion       Int                @default(1) @map("row_version")
+  message          Message            @relation(fields: [messageId], references: [id])
+
+  @@index([status, createdAt], map: "idx_reports_status")
+  @@map("message_reports")
+}
+
+model SportStat {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  sportId    SportId  @map("sport_id")
+  wins       Int      @default(0)
+  losses     Int      @default(0)
+  matches    Int      @default(0)
+  streak     Int      @default(0)
+  level      Int      @default(1)
+  rating     Int      @default(1000)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  deletedAt  DateTime? @map("deleted_at")
+  rowVersion Int      @default(1) @map("row_version")
+
+  @@unique([userId, sportId])
+  @@index([sportId, wins(sort: Desc)], map: "idx_stats_sport_city")
+  @@map("sport_stats")
+}
+
+model LevelThreshold {
+  id           String   @id @default(uuid()) @db.Uuid
+  sportId      SportId  @map("sport_id")
+  level        Int
+  winsRequired Int      @map("wins_required")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+  rowVersion   Int      @default(1) @map("row_version")
+
+  @@unique([sportId, level])
+  @@map("level_thresholds")
+}
+
+model LeaderboardSnapshot {
+  id         String           @id @default(uuid()) @db.Uuid
+  sportId    SportId          @map("sport_id")
+  scope      LeaderboardScope
+  geoId      String?          @map("geo_id") @db.Uuid
+  window     LeaderboardWindow
+  snapshotTs DateTime         @map("snapshot_ts")
+  rows       Json
+  createdAt  DateTime         @default(now()) @map("created_at")
+  updatedAt  DateTime         @updatedAt @map("updated_at")
+  deletedAt  DateTime?        @map("deleted_at")
+  rowVersion Int              @default(1) @map("row_version")
+
+  @@index([sportId, scope, geoId, window, snapshotTs(sort: Desc)], map: "idx_leaderboard_lookup")
+  @@map("leaderboard_snapshots")
+}
+
+model Review {
+  id             String     @id @default(uuid()) @db.Uuid
+  type           ReviewType
+  matchId        String     @map("match_id") @db.Uuid
+  reviewerUserId String     @map("reviewer_user_id") @db.Uuid
+  targetVenueId  String?    @map("target_venue_id") @db.Uuid
+  targetUserId   String?    @map("target_user_id") @db.Uuid
+  rating         Int
+  text           String?
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
+  deletedAt      DateTime?  @map("deleted_at")
+  rowVersion     Int        @default(1) @map("row_version")
+  match          Match      @relation(fields: [matchId], references: [id])
+
+  @@unique([matchId, reviewerUserId, type])
+  @@index([targetVenueId, createdAt], map: "idx_reviews_venue")
+  @@index([targetUserId, createdAt], map: "idx_reviews_user")
+  @@map("reviews")
+}
+
+model Tournament {
+  id                   String               @id @default(uuid()) @db.Uuid
+  venueId              String               @map("venue_id") @db.Uuid
+  sportId              SportId              @map("sport_id")
+  formatType           TournamentFormatType @map("format_type")
+  rulesJson            Json                 @map("rules_json")
+  status               TournamentStatus
+  registrationDeadline DateTime             @map("registration_deadline")
+  startTs              DateTime             @map("start_ts")
+  bracketVersion       Int                  @default(1) @map("bracket_version")
+  createdByUserId      String               @map("created_by_user_id") @db.Uuid
+  createdAt            DateTime             @default(now()) @map("created_at")
+  updatedAt            DateTime             @updatedAt @map("updated_at")
+  deletedAt            DateTime?            @map("deleted_at")
+  rowVersion           Int                  @default(1) @map("row_version")
+  venue                Venue                @relation(fields: [venueId], references: [id])
+  entries              TournamentEntry[]
+  matches              TournamentMatch[]
+  brackets             TournamentBracket[]
+  conversations        Conversation[]
+
+  @@index([sportId, startTs], map: "idx_tournaments_city_sport")
+  @@map("tournaments")
+}
+
+model TournamentEntry {
+  id            String   @id @default(uuid()) @db.Uuid
+  tournamentId  String   @map("tournament_id") @db.Uuid
+  teamId        String?  @map("team_id") @db.Uuid
+  captainUserId String   @map("captain_user_id") @db.Uuid
+  status        TournamentEntryStatus
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+  rowVersion    Int      @default(1) @map("row_version")
+  tournament    Tournament @relation(fields: [tournamentId], references: [id])
+
+  @@index([tournamentId, status], map: "idx_entries_tournament")
+  @@map("tournament_entries")
+}
+
+model TournamentMatch {
+  id            String   @id @default(uuid()) @db.Uuid
+  tournamentId  String   @map("tournament_id") @db.Uuid
+  round         Int
+  matchIndex    Int      @map("match_index")
+  resourceId    String?  @map("resource_id") @db.Uuid
+  startTs       DateTime? @map("start_ts")
+  status        MatchStatus
+  sideAEntryId  String?  @map("side_a_entry_id") @db.Uuid
+  sideBEntryId  String?  @map("side_b_entry_id") @db.Uuid
+  winnerEntryId String?  @map("winner_entry_id") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+  rowVersion    Int      @default(1) @map("row_version")
+  tournament    Tournament @relation(fields: [tournamentId], references: [id])
+
+  @@unique([tournamentId, round, matchIndex])
+  @@index([tournamentId, startTs], map: "idx_tournament_matches_time")
+  @@map("tournament_matches")
+}
+
+model TournamentBracket {
+  id            String   @id @default(uuid()) @db.Uuid
+  tournamentId  String   @map("tournament_id") @db.Uuid
+  version       Int
+  bracketJson   Json     @map("bracket_json")
+  createdByUserId String @map("created_by_user_id") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+  rowVersion    Int      @default(1) @map("row_version")
+  tournament    Tournament @relation(fields: [tournamentId], references: [id])
+
+  @@unique([tournamentId, version])
+  @@map("tournament_brackets")
+}

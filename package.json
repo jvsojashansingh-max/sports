@@ -1,0 +1,18 @@
+{
+  "name": "sports-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.0.0",
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "db:up": "docker compose -f infra/docker/docker-compose.yml up -d",
+    "db:down": "docker compose -f infra/docker/docker-compose.yml down",
+    "db:generate": "pnpm --filter @sports/api exec prisma generate",
+    "db:migrate:dev": "pnpm --filter @sports/api exec prisma migrate dev",
+    "db:migrate:deploy": "pnpm --filter @sports/api exec prisma migrate deploy"
+  }
+}

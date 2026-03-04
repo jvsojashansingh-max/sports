@@ -1,0 +1,29 @@
+# dependencies
+node_modules
+.pnpm-store
+
+# builds
+.next
+dist
+build
+coverage
+*.tsbuildinfo
+
+# env
+.env
+.env.*
+!.env.example
+!.env.production.example
+
+# logs
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# macOS
+.DS_Store
+
+# prisma
+apps/api/prisma/dev.db
+apps/api/prisma/dev.db-journal

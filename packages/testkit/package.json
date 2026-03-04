@@ -1,0 +1,11 @@
+{
+  "name": "@sports/testkit",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "build": "echo \"testkit build pending\"",
+    "lint": "echo \"testkit lint pending\"",
+    "typecheck": "echo \"testkit typecheck pending\"",
+    "test": "echo \"testkit tests pending\""
+  }
+}
