@@ -27,7 +27,7 @@ Use `.env.production.example` as the source of truth.
    - Copy `REDIS_URL` (`rediss://...`).
 3. Render API:
    - Create Web Service from repo.
-   - Build command: `pnpm install --frozen-lockfile && pnpm --filter @sports/api build && pnpm --filter @sports/api exec prisma migrate deploy`
+   - Build command: `pnpm install --frozen-lockfile && pnpm --filter @sports/api build`
    - Start command: `pnpm --filter @sports/api start`
    - Set env vars from `.env.production.example`.
 4. Vercel Web:
