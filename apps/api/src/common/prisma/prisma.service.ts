@@ -4,7 +4,22 @@ import { PrismaClient } from '@prisma/client';
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   async onModuleInit(): Promise<void> {
-    await this.$connect();
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= 12; attempt += 1) {
+      try {
+        await this.$connect();
+        return;
+      } catch (error) {
+        lastError = error;
+        if (attempt === 12) {
+          break;
+        }
+        await delay(5_000);
+      }
+    }
+
+    throw lastError;
   }
 
   async onModuleDestroy(): Promise<void> {
@@ -19,4 +34,8 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       return false;
     }
   }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
