@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
-import { AuditService } from './common/audit/audit.service';
+import { AuditModule } from './common/audit/audit.module';
 import { CacheModule } from './common/cache/cache.module';
 import { AuthGuard } from './common/guards/auth.guard';
 import { IdempotencyGuard } from './common/guards/idempotency.guard';
@@ -27,6 +27,7 @@ import { TournamentsModule } from './modules/tournaments/tournaments.module';
 
 @Module({
   imports: [
+    AuditModule,
     CacheModule,
     ObservabilityModule,
     PrismaModule,
@@ -47,7 +48,6 @@ import { TournamentsModule } from './modules/tournaments/tournaments.module';
     AdminModule,
   ],
   providers: [
-    AuditService,
     IdempotencyService,
     {
       provide: APP_GUARD,
