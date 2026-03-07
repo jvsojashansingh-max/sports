@@ -32,7 +32,7 @@ export function InboxPanel() {
       return;
     }
 
-    const origin = new URL(process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:4000');
+    const origin = new URL(process.env.NEXT_PUBLIC_API_BASE_URL?.trim() ?? 'http://localhost:4000');
     const socket: Socket = io(origin.origin, {
       transports: ['websocket'],
       auth: {

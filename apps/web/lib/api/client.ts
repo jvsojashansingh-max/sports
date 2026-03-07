@@ -1,7 +1,7 @@
 import { getAccessToken } from '../auth/session';
 
 export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, '') ?? 'http://localhost:4000';
+  process.env.NEXT_PUBLIC_API_BASE_URL?.trim().replace(/\/$/, '') ?? 'http://localhost:4000';
 
 export async function apiRequest<T>(
   path: string,
