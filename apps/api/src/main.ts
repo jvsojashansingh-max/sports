@@ -54,12 +54,64 @@ async function bootstrap() {
 
 bootstrap();
 
-function resolveCorsOrigins(value: string | undefined): true | string[] {
+function resolveCorsOrigins(
+  value: string | undefined,
+):
+  | true
+  | ((origin: string | undefined, callback: (error: Error | null, allow?: boolean) => void) => void) {
   if (!value || value.trim().length === 0) {
     return true;
   }
-  return value
+  const exactOrigins = value
     .split(',')
     .map((item) => item.trim())
     .filter((item) => item.length > 0);
+
+  const vercelProjectPrefixes = exactOrigins
+    .map(extractVercelProjectPrefix)
+    .filter((item): item is string => item !== null);
+
+  return (origin, callback) => {
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+
+    if (exactOrigins.includes(origin) || matchesVercelDeploymentOrigin(origin, vercelProjectPrefixes)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(null, false);
+  };
+}
+
+function extractVercelProjectPrefix(origin: string): string | null {
+  try {
+    const url = new URL(origin);
+    if (url.protocol !== 'https:' || !url.hostname.endsWith('.vercel.app')) {
+      return null;
+    }
+    return `${url.hostname.slice(0, -'.vercel.app'.length)}-`;
+  } catch {
+    return null;
+  }
+}
+
+function matchesVercelDeploymentOrigin(origin: string, allowedPrefixes: string[]): boolean {
+  if (allowedPrefixes.length === 0) {
+    return false;
+  }
+
+  try {
+    const url = new URL(origin);
+    if (url.protocol !== 'https:' || !url.hostname.endsWith('.vercel.app')) {
+      return false;
+    }
+
+    const hostnamePrefix = url.hostname.slice(0, -'.vercel.app'.length);
+    return allowedPrefixes.some((allowedPrefix) => hostnamePrefix.startsWith(allowedPrefix));
+  } catch {
+    return false;
+  }
 }
