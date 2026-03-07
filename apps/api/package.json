@@ -4,11 +4,11 @@
   "version": "0.1.0",
   "scripts": {
     "dev": "nest start --watch",
-    "build": "prisma generate && nest build",
+    "build": "sh ./scripts/run-prisma.sh generate && sh ./scripts/run-nest.sh build",
     "start": "sh ./scripts/start-production.sh",
-    "prisma:generate": "prisma generate",
-    "prisma:migrate:dev": "prisma migrate dev",
-    "prisma:migrate:deploy": "prisma migrate deploy",
+    "prisma:generate": "sh ./scripts/run-prisma.sh generate",
+    "prisma:migrate:dev": "sh ./scripts/run-prisma.sh migrate dev",
+    "prisma:migrate:deploy": "sh ./scripts/run-prisma.sh migrate deploy",
     "lint": "echo \"api lint pending\"",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test src/**/*.test.ts"

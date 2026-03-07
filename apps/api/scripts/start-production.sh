@@ -6,7 +6,7 @@ max_attempts=12
 
 while [ "$attempt" -le "$max_attempts" ]; do
   echo "Running prisma migrate deploy (attempt $attempt/$max_attempts)"
-  if pnpm exec prisma migrate deploy; then
+  if sh ./scripts/run-prisma.sh migrate deploy; then
     exec node dist/main.js
   fi
 
