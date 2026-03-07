@@ -184,9 +184,9 @@ model User {
   id            String         @id @default(uuid()) @db.Uuid
   role          UserRole       @default(PLAYER)
   status        UserStatus     @default(ACTIVE)
-  defaultCityId String?        @db.Uuid
-  displayName   String?
-  avatarUrl     String?
+  defaultCityId String?        @map("default_city_id") @db.Uuid
+  displayName   String?        @map("display_name")
+  avatarUrl     String?        @map("avatar_url")
   dob           DateTime?
   createdAt     DateTime       @default(now()) @map("created_at")
   updatedAt     DateTime       @updatedAt @map("updated_at")
