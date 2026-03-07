@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '@/lib/api/client';
+import { DEFAULT_CITY_ID, getCityLabel, INDIA_DEMO_CITIES } from '@/lib/indiaCities';
 
 type LobbyChallenge = {
   id: string;
@@ -15,7 +16,7 @@ type LobbyChallenge = {
 };
 
 export function LobbyPanel() {
-  const [cityId, setCityId] = useState('');
+  const [cityId, setCityId] = useState(DEFAULT_CITY_ID);
   const [sportId, setSportId] = useState('BADMINTON');
   const [rows, setRows] = useState<LobbyChallenge[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -35,9 +36,11 @@ export function LobbyPanel() {
   useEffect(() => {
     if (!cityId) {
       setRows([]);
+      setError(null);
       return;
     }
 
+    setError(null);
     apiRequest<{ challenges: LobbyChallenge[] }>(`/lobby/challenges?${query}`, { authenticated: true })
       .then((res) => setRows(res.challenges))
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load lobby'));
@@ -48,7 +51,13 @@ export function LobbyPanel() {
       <h1 className="page-title">Lobby</h1>
       <p className="page-subtitle">Open challenges in your city and sport.</p>
 
-      <input placeholder="City ID" value={cityId} onChange={(e) => setCityId(e.target.value)} style={inputStyle} />
+      <select value={cityId} onChange={(e) => setCityId(e.target.value)} style={inputStyle}>
+        {INDIA_DEMO_CITIES.map((city) => (
+          <option key={city.id} value={city.id}>
+            {city.code} - {city.name}
+          </option>
+        ))}
+      </select>
       <select value={sportId} onChange={(e) => setSportId(e.target.value)} style={inputStyle}>
         <option value="BADMINTON">BADMINTON</option>
         <option value="PICKLEBALL">PICKLEBALL</option>
@@ -58,7 +67,11 @@ export function LobbyPanel() {
       </select>
 
       {error ? <p>{error}</p> : null}
-      {rows.length === 0 ? <p className="page-subtitle">No live challenges. Create one from Book Slot.</p> : null}
+      {rows.length === 0 ? (
+        <p className="page-subtitle">
+          No open challenges in {getCityLabel(cityId)} yet. Use Book Slot to browse venues or create the first challenge.
+        </p>
+      ) : null}
 
       {rows.map((row) => (
         <a key={row.id} href={`/challenge/${row.id}`} style={cardStyle}>

@@ -60,6 +60,15 @@ export class VenuesService {
         stateId: true,
         address: true,
         status: true,
+        resources: {
+          where: {
+            deletedAt: null,
+            status: ResourceStatus.ACTIVE,
+          },
+          select: {
+            sportId: true,
+          },
+        },
       },
       take: 100,
     });

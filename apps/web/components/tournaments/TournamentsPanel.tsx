@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { apiRequest } from '@/lib/api/client';
 import { getAccessToken } from '@/lib/auth/session';
+import { getCityLabel } from '@/lib/indiaCities';
 
 type TournamentRow = {
   id: string;
@@ -10,6 +11,11 @@ type TournamentRow = {
   status: string;
   startTs: string;
   registrationDeadline: string;
+  venue: {
+    id: string;
+    name: string;
+    cityId: string;
+  };
 };
 
 export function TournamentsPanel() {
@@ -53,6 +59,8 @@ export function TournamentsPanel() {
       {rows.map((row) => (
         <article key={row.id} style={cardStyle}>
           <strong>{row.sportId}</strong>
+          <span>{row.venue.name}</span>
+          <span>{getCityLabel(row.venue.cityId)}</span>
           <span>Status: {row.status}</span>
           <span>Start: {new Date(row.startTs).toLocaleString()}</span>
           <span>Register by: {new Date(row.registrationDeadline).toLocaleString()}</span>

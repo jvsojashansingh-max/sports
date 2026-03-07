@@ -139,6 +139,20 @@ export class TournamentsService {
         ...(query.sportId ? { sportId: query.sportId } : {}),
         ...(query.status ? { status: query.status } : {}),
       },
+      select: {
+        id: true,
+        sportId: true,
+        status: true,
+        startTs: true,
+        registrationDeadline: true,
+        venue: {
+          select: {
+            id: true,
+            name: true,
+            cityId: true,
+          },
+        },
+      },
       orderBy: [{ startTs: 'asc' }],
       take: 200,
     });

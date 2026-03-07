@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { apiRequest } from '@/lib/api/client';
 import { clearSessionTokens } from '@/lib/auth/session';
+import { DEFAULT_CITY_ID, getCityLabel, INDIA_DEMO_CITIES } from '@/lib/indiaCities';
 
 type MeResponse = {
   id: string;
@@ -21,7 +22,7 @@ export function ProfilePanel() {
     apiRequest<MeResponse>('/me', { authenticated: true })
       .then((res) => {
         setMe(res);
-        setCityId(res.defaultCityId ?? '');
+        setCityId(res.defaultCityId ?? DEFAULT_CITY_ID);
       })
       .catch((err) => {
         const message = err instanceof Error ? err.message : 'Failed to load profile';
@@ -39,14 +40,21 @@ export function ProfilePanel() {
         <>
           <p>User ID: {me.id}</p>
           <p>Role: {me.role}</p>
-          <label htmlFor="cityId">Default city ID</label>
-          <input
+          <p>Selected city: {getCityLabel(cityId || me.defaultCityId)}</p>
+          <label htmlFor="cityId">Default city</label>
+          <select
             id="cityId"
             value={cityId}
             onChange={(event) => setCityId(event.target.value)}
             style={inputStyle}
-            placeholder="Set city id"
-          />
+          >
+            {INDIA_DEMO_CITIES.map((city) => (
+              <option key={city.id} value={city.id}>
+                {city.code} - {city.name}
+              </option>
+            ))}
+          </select>
+          <p className="page-subtitle">Chandigarh is preselected for the demo. You can switch cities anytime.</p>
           <button
             type="button"
             style={buttonStyle}

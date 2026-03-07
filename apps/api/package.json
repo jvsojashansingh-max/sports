@@ -9,6 +9,7 @@
     "prisma:generate": "sh ./scripts/run-prisma.sh generate",
     "prisma:migrate:dev": "sh ./scripts/run-prisma.sh migrate dev",
     "prisma:migrate:deploy": "sh ./scripts/run-prisma.sh migrate deploy",
+    "seed:demo:india": "tsx ./scripts/seed-demo-india-data.ts",
     "lint": "echo \"api lint pending\"",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test src/**/*.test.ts"
