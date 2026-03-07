@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { apiRequest } from '@/lib/api/client';
+import { getAccessToken } from '@/lib/auth/session';
 
 type TournamentRow = {
   id: string;
@@ -18,16 +19,28 @@ export function TournamentsPanel() {
 
   async function refresh() {
     setLoading(true);
+    setMessage(null);
+
+    if (!getAccessToken()) {
+      setRows([]);
+      setMessage(SIGN_IN_MESSAGE);
+      setLoading(false);
+      return;
+    }
+
     try {
       const tournaments = await apiRequest<TournamentRow[]>('/tournaments', { authenticated: true });
       setRows(tournaments);
+    } catch (error) {
+      setRows([]);
+      setMessage(resolveTournamentMessage(error));
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    refresh().catch((err) => setMessage(err instanceof Error ? err.message : 'Failed to load tournaments'));
+    refresh().catch((err) => setMessage(resolveTournamentMessage(err)));
   }, []);
 
   return (
@@ -36,7 +49,7 @@ export function TournamentsPanel() {
       <p className="page-subtitle">Single elimination tournaments.</p>
 
       {loading ? <p className="page-subtitle">Loading tournaments...</p> : null}
-      {!loading && rows.length === 0 ? <p className="page-subtitle">No tournaments available.</p> : null}
+      {!loading && rows.length === 0 && !message ? <p className="page-subtitle">No tournaments available.</p> : null}
       {rows.map((row) => (
         <article key={row.id} style={cardStyle}>
           <strong>{row.sportId}</strong>
@@ -70,6 +83,16 @@ export function TournamentsPanel() {
       {message ? <p>{message}</p> : null}
     </section>
   );
+}
+
+const SIGN_IN_MESSAGE = 'Sign in from the Auth page to view tournaments and register.';
+
+function resolveTournamentMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : 'Failed to load tournaments';
+  if (message.includes('UNAUTHENTICATED') || message.includes('Unauthorized')) {
+    return SIGN_IN_MESSAGE;
+  }
+  return message;
 }
 
 const cardStyle: React.CSSProperties = {

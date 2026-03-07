@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { apiRequest } from '@/lib/api/client';
+import { getAccessToken } from '@/lib/auth/session';
 
 type TournamentDetails = {
   id: string;
@@ -46,6 +47,11 @@ export function TournamentDetailPanel({ tournamentId }: { tournamentId: string }
   const [winnerByMatchId, setWinnerByMatchId] = useState<Record<string, 'A' | 'B'>>({});
 
   const refresh = useCallback(async () => {
+    if (!getAccessToken()) {
+      setTournament(null);
+      throw new Error(SIGN_IN_MESSAGE);
+    }
+
     const response = await apiRequest<TournamentDetails>(`/tournaments/${tournamentId}`, {
       authenticated: true,
     });
@@ -53,7 +59,7 @@ export function TournamentDetailPanel({ tournamentId }: { tournamentId: string }
   }, [tournamentId]);
 
   useEffect(() => {
-    refresh().catch((err) => setMessage(err instanceof Error ? err.message : 'Failed to load tournament'));
+    refresh().catch((err) => setMessage(resolveTournamentMessage(err)));
   }, [refresh]);
 
   if (!tournament && !message) {
@@ -97,7 +103,7 @@ export function TournamentDetailPanel({ tournamentId }: { tournamentId: string }
                   setMessage('Registered successfully.');
                   await refresh();
                 } catch (err) {
-                  setMessage(err instanceof Error ? err.message : 'Registration failed');
+                  setMessage(resolveTournamentMessage(err));
                 }
               }}
             >
@@ -167,7 +173,7 @@ export function TournamentDetailPanel({ tournamentId }: { tournamentId: string }
                             setMessage('Result submitted.');
                             await refresh();
                           } catch (err) {
-                            setMessage(err instanceof Error ? err.message : 'Result submission failed');
+                            setMessage(resolveTournamentMessage(err));
                           }
                         }}
                       >
@@ -208,6 +214,16 @@ export function TournamentDetailPanel({ tournamentId }: { tournamentId: string }
       {message ? <p>{message}</p> : null}
     </section>
   );
+}
+
+const SIGN_IN_MESSAGE = 'Sign in from the Auth page to view this tournament and register.';
+
+function resolveTournamentMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : 'Failed to load tournament';
+  if (message.includes('UNAUTHENTICATED') || message.includes('Unauthorized')) {
+    return SIGN_IN_MESSAGE;
+  }
+  return message;
 }
 
 function formatTs(value: string): string {

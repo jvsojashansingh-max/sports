@@ -22,9 +22,9 @@ type VerifyOtpResponse = {
 export function OtpAuthPanel() {
   const [phone, setPhone] = useState('+919999999999');
   const [requestId, setRequestId] = useState('');
-  const [otp, setOtp] = useState('123456');
+  const [otp, setOtp] = useState('');
   const [devOtp, setDevOtp] = useState<string | null>(null);
-  const [googleUrl, setGoogleUrl] = useState<string | null>(null);
+  const [googleStubReady, setGoogleStubReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -43,7 +43,12 @@ export function OtpAuthPanel() {
       });
       setRequestId(res.requestId);
       setDevOtp(res.devOtp ?? null);
-      setMessage('OTP requested. Continue with verify.');
+      if (res.devOtp) {
+        setOtp(res.devOtp);
+        setMessage('OTP requested. Demo mode filled the request ID and OTP for you. Click Verify OTP.');
+      } else {
+        setMessage('OTP requested. Enter the request ID and OTP to continue.');
+      }
     } catch (error) {
       const err = error instanceof Error ? error.message : 'Request OTP failed';
       setMessage(err);
@@ -72,7 +77,8 @@ export function OtpAuthPanel() {
         idempotency: true,
       });
       setSessionTokens(res.accessToken, res.refreshToken);
-      setMessage(`Signed in as ${res.user.id}.`);
+      setMessage(`Signed in as ${res.user.id}. Redirecting...`);
+      window.location.href = '/profile';
     } catch (error) {
       const err = error instanceof Error ? error.message : 'Verify OTP failed';
       setMessage(err);
@@ -86,11 +92,11 @@ export function OtpAuthPanel() {
     setMessage(null);
 
     try {
-      const res = await apiRequest<{ url: string; state: string }>('/auth/google/start?deviceId=web-browser', {
+      await apiRequest<{ url: string; state: string }>('/auth/google/start?deviceId=web-browser', {
         method: 'GET',
       });
-      setGoogleUrl(res.url);
-      setMessage('Google login start created. In Sprint 1, this will redirect to consent.');
+      setGoogleStubReady(true);
+      setMessage('Google sign-in is still a demo stub here. Use phone OTP for now.');
     } catch (error) {
       const err = error instanceof Error ? error.message : 'Google start failed';
       setMessage(err);
@@ -103,6 +109,7 @@ export function OtpAuthPanel() {
     <section className="page-card" style={{ display: 'grid', gap: 16 }}>
       <h1 className="page-title">Sign In</h1>
       <p className="page-subtitle">Phone OTP sign-in (Google account linking begins in Sprint 1).</p>
+      <p className="page-subtitle">Demo flow: click Request OTP, then Verify OTP. The request ID and OTP will auto-fill in stub mode.</p>
 
       <form onSubmit={onRequestOtp} style={{ display: 'grid', gap: 8 }}>
         <label htmlFor="phone">Phone (+country code)</label>
@@ -147,7 +154,7 @@ export function OtpAuthPanel() {
       </button>
 
       {devOtp ? <p className="page-subtitle">Dev OTP: {devOtp}</p> : null}
-      {googleUrl ? <p className="page-subtitle">Google callback URL: {googleUrl}</p> : null}
+      {googleStubReady ? <p className="page-subtitle">Google sign-in is not live yet in this demo build.</p> : null}
       {message ? <p>{message}</p> : null}
     </section>
   );

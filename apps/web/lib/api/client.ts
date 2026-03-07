@@ -28,8 +28,29 @@ export async function apiRequest<T>(
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(text || `Request failed with ${res.status}`);
+    const parsedMessage = parseApiErrorMessage(text);
+    throw new Error(parsedMessage || text || `Request failed with ${res.status}`);
   }
 
   return (await res.json()) as T;
+}
+
+function parseApiErrorMessage(text: string): string | null {
+  if (!text) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(text) as { message?: unknown; error?: unknown };
+    if (typeof parsed.message === 'string' && parsed.message.trim().length > 0) {
+      return parsed.message;
+    }
+    if (typeof parsed.error === 'string' && parsed.error.trim().length > 0) {
+      return parsed.error;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
 }
