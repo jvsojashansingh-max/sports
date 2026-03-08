@@ -26,8 +26,15 @@ test('vendor roles can manage match-day operations', () => {
   assert.equal(can('VENDOR_OWNER', 'conversation.moderate'), true);
   assert.equal(can('VENDOR_OWNER', 'tournament.create'), true);
   assert.equal(can('VENDOR_STAFF', 'tournament.bracket.generate'), true);
+  assert.equal(can('VENDOR_OWNER', 'challenge.create'), true);
+  assert.equal(can('VENDOR_OWNER', 'booking.hold.create'), true);
+  assert.equal(can('VENDOR_OWNER', 'conversation.support.open'), true);
+  assert.equal(can('VENDOR_OWNER', 'match.result.submit'), true);
+  assert.equal(can('VENDOR_OWNER', 'review.create'), true);
+  assert.equal(can('VENDOR_OWNER', 'tournament.register'), true);
   assert.equal(can('PLAYER', 'match.checkin.manage'), false);
   assert.equal(can('PLAYER', 'conversation.moderate'), false);
+  assert.equal(can('VENDOR_STAFF', 'challenge.create'), false);
 });
 
 test('non-admin cannot review vendor approvals', () => {

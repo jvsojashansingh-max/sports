@@ -53,13 +53,15 @@ export function can(role: UserRole, action: Action, resource?: ResourceContext):
     return true;
   }
 
+  const canUsePlayerFlows = role === 'PLAYER' || role === 'VENDOR_OWNER';
+
   switch (action) {
     case 'vendor.register':
       return role === 'PLAYER';
     case 'booking.hold.create':
     case 'booking.hold.activate':
     case 'booking.list.mine':
-      return role === 'PLAYER';
+      return canUsePlayerFlows;
     case 'vendor.venue.manage':
     case 'vendor.resource.manage':
     case 'vendor.availability.manage':
@@ -76,23 +78,23 @@ export function can(role: UserRole, action: Action, resource?: ResourceContext):
     case 'conversation.messages.read':
     case 'conversation.messages.send':
     case 'conversation.support.open':
-      return role === 'PLAYER';
+      return canUsePlayerFlows;
     case 'conversation.moderate':
       return role === 'VENDOR_OWNER' || role === 'VENDOR_STAFF';
     case 'match.checkin.manage':
     case 'match.forfeit.manage':
       return role === 'VENDOR_OWNER' || role === 'VENDOR_STAFF';
     case 'match.result.submit':
-      return role === 'PLAYER';
+      return canUsePlayerFlows;
     case 'message.report':
       return role === 'PLAYER' || role === 'VENDOR_OWNER' || role === 'VENDOR_STAFF';
     case 'review.create':
-      return role === 'PLAYER';
+      return canUsePlayerFlows;
     case 'tournament.create':
     case 'tournament.bracket.generate':
       return role === 'VENDOR_OWNER' || role === 'VENDOR_STAFF';
     case 'tournament.register':
-      return role === 'PLAYER';
+      return canUsePlayerFlows;
     case 'tournament.view':
       return role === 'PLAYER' || role === 'VENDOR_OWNER' || role === 'VENDOR_STAFF';
     case 'dispute.admin.review':
