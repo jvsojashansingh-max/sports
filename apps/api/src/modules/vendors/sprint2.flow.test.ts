@@ -57,6 +57,40 @@ test('sprint2 flow: register -> approve -> venue create -> live venue visible', 
   assert.equal(fake.users.find((u) => u.id === userId)?.role, 'VENDOR_OWNER');
 });
 
+test('stub mode auto-approves vendor registration and unlocks onboarding immediately', async () => {
+  const previousOtpProvider = process.env.OTP_PROVIDER;
+  process.env.OTP_PROVIDER = 'stub';
+
+  try {
+    const fake = createFakePrisma();
+    const audit = { log: async () => undefined };
+    const vendorsService = new VendorsService(fake as never, audit as never);
+    const venuesService = new VenuesService(fake as never, audit as never);
+
+    const userId = '00000000-0000-0000-0000-000000000002';
+    fake.users.push({ id: userId, role: 'PLAYER' });
+
+    const registration = await vendorsService.register(userId, { businessName: 'Stub Sports' });
+    assert.equal(registration.status, VendorStatus.APPROVED);
+    assert.equal(fake.users.find((u) => u.id === userId)?.role, 'VENDOR_OWNER');
+
+    const createdVenue = await venuesService.createVenue(userId, {
+      name: 'Stub Arena',
+      cityId: '00000000-0000-4000-8000-0000000003e9',
+      stateId: '00000000-0000-4000-8000-0000000007d1',
+      address: 'Sector 35-C, Chandigarh',
+    });
+
+    assert.equal(createdVenue.name, 'Stub Arena');
+  } finally {
+    if (previousOtpProvider === undefined) {
+      delete process.env.OTP_PROVIDER;
+    } else {
+      process.env.OTP_PROVIDER = previousOtpProvider;
+    }
+  }
+});
+
 function createFakePrisma() {
   const vendors: Array<{
     id: string;
@@ -95,9 +129,9 @@ function createFakePrisma() {
         const row = {
           id: `vendor-${vendors.length + 1}`,
           ownerUserId: data.ownerUserId,
-          status: VendorStatus.PENDING_APPROVAL,
+          status: data.status ?? VendorStatus.PENDING_APPROVAL,
           businessName: data.businessName,
-          approvedAt: null,
+          approvedAt: data.approvedAt ?? null,
           createdAt: new Date(),
         };
         vendors.push(row);

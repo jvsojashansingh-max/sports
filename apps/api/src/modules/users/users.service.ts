@@ -20,10 +20,18 @@ export class UsersService {
       throw new NotFoundException('NOT_FOUND');
     }
 
+    const vendor = await this.prisma.vendor.findFirst({
+      where: {
+        ownerUserId: userId,
+        status: 'APPROVED',
+      },
+      select: { id: true },
+    });
+
     return {
       id: user.id,
       role: user.role,
-      vendorId: null,
+      vendorId: vendor?.id ?? null,
       defaultCityId: user.defaultCityId,
     };
   }
@@ -47,10 +55,18 @@ export class UsersService {
       throw new NotFoundException('NOT_FOUND');
     }
 
+    const vendor = await this.prisma.vendor.findFirst({
+      where: {
+        ownerUserId: userId,
+        status: 'APPROVED',
+      },
+      select: { id: true },
+    });
+
     return {
       id: updated.id,
       role: updated.role,
-      vendorId: null,
+      vendorId: vendor?.id ?? null,
       defaultCityId: updated.defaultCityId,
     };
   }

@@ -32,6 +32,7 @@ type VenueBlueprint = {
 };
 
 const prisma = new PrismaClient();
+const TEST_PLAYER_PHONE = '+919999999999';
 
 function demoUuid(seed: number): string {
   return `00000000-0000-4000-8000-${seed.toString(16).padStart(12, '0')}`;
@@ -249,6 +250,7 @@ async function upsertAvailabilityTemplate(
 
 async function main() {
   const summary = {
+    testUsers: 0,
     users: 0,
     vendors: 0,
     venues: 0,
@@ -257,6 +259,49 @@ async function main() {
     tournaments: 0,
     conversations: 0,
   };
+
+  const chandigarh = INDIA_DEMO_CITIES.find((city) => city.code === 'CHD');
+  if (!chandigarh) {
+    throw new Error('Chandigarh demo city missing');
+  }
+
+  const testUserId = demoUuid(2501);
+  await prisma.user.upsert({
+    where: { id: testUserId },
+    update: {
+      role: UserRole.PLAYER,
+      status: UserStatus.ACTIVE,
+      defaultCityId: chandigarh.id,
+      displayName: 'CHD Test User',
+      deletedAt: null,
+    },
+    create: {
+      id: testUserId,
+      role: UserRole.PLAYER,
+      status: UserStatus.ACTIVE,
+      defaultCityId: chandigarh.id,
+      displayName: 'CHD Test User',
+    },
+  });
+  await prisma.userIdentity.upsert({
+    where: {
+      provider_providerSubject: {
+        provider: 'PHONE_OTP',
+        providerSubject: TEST_PLAYER_PHONE,
+      },
+    },
+    update: {
+      userId: testUserId,
+      isPrimary: true,
+    },
+    create: {
+      userId: testUserId,
+      provider: 'PHONE_OTP',
+      providerSubject: TEST_PLAYER_PHONE,
+      isPrimary: true,
+    },
+  });
+  summary.testUsers += 1;
 
   for (const [cityIndex, city] of INDIA_DEMO_CITIES.entries()) {
     const ownerUserId = demoUuid(3000 + cityIndex + 1);

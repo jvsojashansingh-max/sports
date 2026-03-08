@@ -17,6 +17,8 @@ type AuthUser = {
   vendorId: string | null;
 };
 
+const DEMO_DEFAULT_CITY_ID = '00000000-0000-4000-8000-0000000003e9';
+
 @Injectable()
 export class AuthService {
   private readonly phoneOtpWindow = new Map<string, number[]>();
@@ -277,6 +279,7 @@ export class AuthService {
       data: {
         role: 'PLAYER',
         status: 'ACTIVE',
+        defaultCityId: this.shouldDefaultToDemoCity() ? DEMO_DEFAULT_CITY_ID : undefined,
       },
     });
     await this.prisma.userIdentity.create({
@@ -355,6 +358,10 @@ export class AuthService {
 
   private googleStateSecret(): string {
     return process.env.JWT_ACCESS_SECRET || 'dev-google-state-secret';
+  }
+
+  private shouldDefaultToDemoCity(): boolean {
+    return process.env.OTP_PROVIDER === 'stub';
   }
 
   private assertRateLimit(

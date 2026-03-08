@@ -2,10 +2,12 @@
 
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { apiRequest } from '@/lib/api/client';
+import { DEFAULT_CITY_ID, INDIA_DEMO_CITIES, getCityLabel } from '@/lib/indiaCities';
 
 type Venue = {
   id: string;
   name: string;
+  cityId: string;
   status: string;
 };
 
@@ -24,8 +26,7 @@ export function VendorSetupPanel() {
   const [message, setMessage] = useState<string | null>(null);
 
   const [name, setName] = useState('');
-  const [cityId, setCityId] = useState('');
-  const [stateId, setStateId] = useState('');
+  const [cityId, setCityId] = useState(DEFAULT_CITY_ID);
   const [address, setAddress] = useState('');
 
   const [resourceVenueId, setResourceVenueId] = useState('');
@@ -51,6 +52,9 @@ export function VendorSetupPanel() {
   useEffect(() => {
     refresh().catch((err) => setMessage(err instanceof Error ? err.message : 'Failed to load vendor data'));
   }, [refresh]);
+
+  const selectedCity = INDIA_DEMO_CITIES.find((city) => city.id === cityId) ?? INDIA_DEMO_CITIES[0];
+  const stateId = selectedCity.stateId;
 
   async function submitVenue(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -95,13 +99,19 @@ export function VendorSetupPanel() {
   return (
     <section className="page-card" style={{ display: 'grid', gap: 12 }}>
       <h1 className="page-title">Vendor Setup</h1>
-      <p className="page-subtitle">Create venues and resources after admin approval.</p>
+      <p className="page-subtitle">Create venues and resources for the 5 India demo cities. Stub mode auto-approves vendor signup.</p>
 
       <form onSubmit={submitVenue} style={{ display: 'grid', gap: 8 }}>
         <h2 style={{ margin: 0 }}>Create Venue</h2>
         <input placeholder="Venue name" value={name} onChange={(e) => setName(e.target.value)} style={inputStyle} required />
-        <input placeholder="City ID" value={cityId} onChange={(e) => setCityId(e.target.value)} style={inputStyle} required />
-        <input placeholder="State ID" value={stateId} onChange={(e) => setStateId(e.target.value)} style={inputStyle} required />
+        <select value={cityId} onChange={(e) => setCityId(e.target.value)} style={inputStyle} required>
+          {INDIA_DEMO_CITIES.map((city) => (
+            <option key={city.id} value={city.id}>
+              {city.code} - {city.name}
+            </option>
+          ))}
+        </select>
+        <input value={selectedCity.stateName} style={inputStyle} readOnly />
         <input placeholder="Address" value={address} onChange={(e) => setAddress(e.target.value)} style={inputStyle} required />
         <button type="submit" style={buttonStyle}>Create Venue</button>
       </form>
@@ -130,6 +140,7 @@ export function VendorSetupPanel() {
       {venues.map((venue) => (
         <article key={venue.id} style={cardStyle}>
           <strong>{venue.name}</strong>
+          <span>{getCityLabel(venue.cityId)}</span>
           <span>{venue.status}</span>
         </article>
       ))}
