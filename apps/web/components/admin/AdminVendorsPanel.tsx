@@ -6,6 +6,7 @@ import { apiRequest } from '@/lib/api/client';
 type VendorRow = {
   id: string;
   ownerUserId: string;
+  ownerLabel: string;
   status: string;
   businessName: string;
   approvedAt: string | null;
@@ -56,7 +57,7 @@ export function AdminVendorsPanel() {
         <article key={row.id} style={cardStyle}>
           <strong>{row.businessName}</strong>
           <span>Status: {row.status}</span>
-          <span>Owner: {row.ownerUserId}</span>
+          <span>Owner: {row.ownerLabel}</span>
           {statusFilter === 'PENDING_APPROVAL' ? (
             <div style={{ display: 'flex', gap: 8 }}>
               <button style={buttonStyle} onClick={() => updateStatus(row.id, 'approve')}>
@@ -74,7 +75,7 @@ export function AdminVendorsPanel() {
 }
 
 async function fetchRows(status: string): Promise<VendorRow[]> {
-  const response = await apiRequest<{ id: string; ownerUserId: string; status: string; businessName: string; approvedAt: string | null; createdAt: string; }[]>(
+  const response = await apiRequest<{ id: string; ownerUserId: string; ownerLabel: string; status: string; businessName: string; approvedAt: string | null; createdAt: string; }[]>(
     `/admin/vendors?status=${encodeURIComponent(status)}`,
     {
       method: 'GET',

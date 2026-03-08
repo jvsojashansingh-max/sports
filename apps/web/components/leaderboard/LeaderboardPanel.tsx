@@ -5,6 +5,7 @@ import { apiRequest } from '@/lib/api/client';
 
 type LeaderboardRow = {
   userId: string;
+  userLabel?: string;
   wins: number;
   losses: number;
   matches: number;
@@ -46,7 +47,7 @@ export function LeaderboardPanel() {
       {rows.map((row, index) => (
         <article key={row.userId} style={cardStyle}>
           <strong>#{index + 1}</strong>
-          <span>{row.userId}</span>
+          <span>{row.userLabel ?? `Player ${index + 1}`}</span>
           <span>Wins: {row.wins}</span>
           <span>Level: {row.level}</span>
         </article>

@@ -34,8 +34,7 @@ export function AdminDisputesPanel() {
       </select>
       {rows.map((row) => (
         <article key={row.id} style={cardStyle}>
-          <strong>{row.id}</strong>
-          <span>Match: {row.matchId}</span>
+          <strong>Dispute review</strong>
           <span>Status: {row.status}</span>
           <span>Reason: {row.reason}</span>
           <div style={{ display: 'flex', gap: 8 }}>

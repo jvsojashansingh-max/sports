@@ -63,7 +63,6 @@ export function InboxPanel() {
           <strong>{row.title}</strong>
           <span>{row.type}</span>
           <span>Status: {row.status}</span>
-          {row.challengeId ? <span>Challenge: {row.challengeId}</span> : null}
         </a>
       ))}
     </section>

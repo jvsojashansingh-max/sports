@@ -1,27 +1,43 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '@/lib/api/client';
 import { getAccessToken } from '@/lib/auth/session';
 import { parseSessionAccessToken } from '@/lib/auth/token';
 import { io, type Socket } from 'socket.io-client';
 
+type ParticipantRow = {
+  userId: string;
+  label: string;
+  roleInChat: 'MEMBER' | 'MODERATOR';
+  mutedUntil: string | null;
+};
+
 type MessageRow = {
   id: string;
   senderUserId: string;
+  senderLabel: string;
   body: string;
   status: 'SENT' | 'DELETED_BY_MOD' | 'DELETED_BY_USER';
   createdAt: string;
 };
 
+type ConversationResponse = {
+  title: string;
+  type: string;
+  participants: ParticipantRow[];
+  messages: MessageRow[];
+};
+
 export function ConversationPanel({ conversationId }: { conversationId: string }) {
   const [messages, setMessages] = useState<MessageRow[]>([]);
+  const [participants, setParticipants] = useState<ParticipantRow[]>([]);
+  const [title, setTitle] = useState('Conversation');
   const [body, setBody] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [moderationUserId, setModerationUserId] = useState('');
   const [moderationMutedUntil, setModerationMutedUntil] = useState('');
-  const [deleteMessageId, setDeleteMessageId] = useState('');
   const [reportReason, setReportReason] = useState('Abusive message');
 
   const tokenPayload = parseSessionAccessToken(getAccessToken());
@@ -30,17 +46,29 @@ export function ConversationPanel({ conversationId }: { conversationId: string }
     tokenPayload?.role === 'VENDOR_OWNER' ||
     tokenPayload?.role === 'VENDOR_STAFF';
 
+  const participantLabelByUserId = useMemo(
+    () => new Map(participants.map((participant) => [participant.userId, participant.label])),
+    [participants],
+  );
+
   const refresh = useCallback(async () => {
-    const res = await apiRequest<{ messages: MessageRow[] }>(
-      `/conversations/${conversationId}/messages`,
-      { authenticated: true },
-    );
+    const res = await apiRequest<ConversationResponse>(`/conversations/${conversationId}/messages`, {
+      authenticated: true,
+    });
+    setTitle(res.title);
     setMessages(res.messages);
+    setParticipants(res.participants);
   }, [conversationId]);
 
   useEffect(() => {
     refresh().catch((err) => setError(err instanceof Error ? err.message : 'Failed to load messages'));
   }, [refresh]);
+
+  useEffect(() => {
+    if (!moderationUserId && participants.length > 0) {
+      setModerationUserId(participants[0].userId);
+    }
+  }, [moderationUserId, participants]);
 
   useEffect(() => {
     const token = getAccessToken();
@@ -79,7 +107,13 @@ export function ConversationPanel({ conversationId }: { conversationId: string }
           if (current.some((row) => row.id === incoming.id)) {
             return current;
           }
-          return [...current, incoming].sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+          return [
+            ...current,
+            {
+              ...incoming,
+              senderLabel: participantLabelByUserId.get(incoming.senderUserId) ?? 'Player',
+            },
+          ].sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
         });
       },
     );
@@ -97,7 +131,15 @@ export function ConversationPanel({ conversationId }: { conversationId: string }
           return;
         }
         setMessages((current) =>
-          current.map((row) => (row.id === incoming.id ? { ...row, ...incoming } : row)),
+          current.map((row) =>
+            row.id === incoming.id
+              ? {
+                  ...row,
+                  ...incoming,
+                  senderLabel: participantLabelByUserId.get(incoming.senderUserId) ?? row.senderLabel,
+                }
+              : row,
+          ),
         );
       },
     );
@@ -108,21 +150,21 @@ export function ConversationPanel({ conversationId }: { conversationId: string }
       });
       socket.disconnect();
     };
-  }, [conversationId]);
+  }, [conversationId, participantLabelByUserId]);
 
   return (
     <section className="page-card" style={{ display: 'grid', gap: 10 }}>
-      <h1 className="page-title">Chat {conversationId}</h1>
+      <h1 className="page-title">{title}</h1>
       <p className="page-subtitle">Challenge conversation chat.</p>
 
       {error ? <p>{error}</p> : null}
       <div style={{ display: 'grid', gap: 8 }}>
         {messages.map((row) => (
           <article key={row.id} style={bubbleStyle}>
-            <strong>{row.senderUserId}</strong>
+            <strong>{row.senderLabel}</strong>
             <span>{row.status === 'SENT' ? row.body : '[Message removed]'}</span>
             <span>{new Date(row.createdAt).toLocaleTimeString()}</span>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <button
                 style={smallButtonStyle}
                 onClick={async () => {
@@ -143,6 +185,27 @@ export function ConversationPanel({ conversationId }: { conversationId: string }
               >
                 Report
               </button>
+              {canModerate && row.status === 'SENT' ? (
+                <button
+                  style={smallButtonStyle}
+                  onClick={async () => {
+                    try {
+                      await apiRequest(`/vendor/messages/${row.id}/delete`, {
+                        method: 'POST',
+                        authenticated: true,
+                        idempotency: true,
+                        body: JSON.stringify({}),
+                      });
+                      setMessage('Message deleted by moderator.');
+                      await refresh();
+                    } catch (err) {
+                      setMessage(err instanceof Error ? err.message : 'Delete failed');
+                    }
+                  }}
+                >
+                  Delete Message
+                </button>
+              ) : null}
             </div>
           </article>
         ))}
@@ -187,12 +250,19 @@ export function ConversationPanel({ conversationId }: { conversationId: string }
         <div style={moderationSectionStyle}>
           <h2 style={{ margin: 0, fontSize: 16 }}>Moderation</h2>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <input
+            <select
               value={moderationUserId}
               onChange={(event) => setModerationUserId(event.target.value)}
-              placeholder="Participant userId"
               style={inputStyle}
-            />
+            >
+              <option value="">Select participant</option>
+              {participants.map((participant) => (
+                <option key={participant.userId} value={participant.userId}>
+                  {participant.label} · {participant.roleInChat}
+                  {participant.mutedUntil ? ` · muted until ${new Date(participant.mutedUntil).toLocaleString()}` : ''}
+                </option>
+              ))}
+            </select>
             <input
               type="datetime-local"
               value={moderationMutedUntil}
@@ -201,6 +271,7 @@ export function ConversationPanel({ conversationId }: { conversationId: string }
             />
             <button
               style={buttonStyle}
+              disabled={!moderationUserId}
               onClick={async () => {
                 try {
                   await apiRequest(`/vendor/conversations/${conversationId}/mute`, {
@@ -215,39 +286,13 @@ export function ConversationPanel({ conversationId }: { conversationId: string }
                     }),
                   });
                   setMessage('Participant muted.');
+                  await refresh();
                 } catch (err) {
                   setMessage(err instanceof Error ? err.message : 'Mute failed');
                 }
               }}
             >
               Mute Participant
-            </button>
-          </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <input
-              value={deleteMessageId}
-              onChange={(event) => setDeleteMessageId(event.target.value)}
-              placeholder="Message ID"
-              style={inputStyle}
-            />
-            <button
-              style={buttonStyle}
-              onClick={async () => {
-                try {
-                  await apiRequest(`/vendor/messages/${deleteMessageId}/delete`, {
-                    method: 'POST',
-                    authenticated: true,
-                    idempotency: true,
-                    body: JSON.stringify({}),
-                  });
-                  setMessage('Message deleted by moderator.');
-                  await refresh();
-                } catch (err) {
-                  setMessage(err instanceof Error ? err.message : 'Delete failed');
-                }
-              }}
-            >
-              Delete Message
             </button>
           </div>
         </div>

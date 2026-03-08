@@ -27,6 +27,7 @@ import type {
   ListTournamentsQueryDto,
   RegisterTournamentDto,
 } from './tournaments.dto';
+import { buildUserLabelMap } from '../../common/users/user-labels';
 
 @Injectable()
 export class TournamentsService {
@@ -188,6 +189,13 @@ export class TournamentsService {
           },
           take: 1,
         },
+        venue: {
+          select: {
+            id: true,
+            name: true,
+            cityId: true,
+          },
+        },
       },
     });
     if (!tournament) {
@@ -227,12 +235,51 @@ export class TournamentsService {
       },
     });
 
+    const resourceIds = Array.from(
+      new Set(
+        tournament.matches
+          .map((row) => row.resourceId)
+          .filter((value): value is string => Boolean(value)),
+      ),
+    );
+    const [resources, userLabelMap] = await Promise.all([
+      resourceIds.length
+        ? this.prisma.resource.findMany({
+            where: {
+              id: {
+                in: resourceIds,
+              },
+            },
+            select: {
+              id: true,
+              name: true,
+            },
+          })
+        : Promise.resolve([]),
+      buildUserLabelMap(
+        this.prisma,
+        tournament.entries.map((entry) => entry.captainUserId),
+      ),
+    ]);
+    const resourceNameById = new Map(resources.map((row) => [row.id, row.name]));
+
+    const entries = tournament.entries.map((entry) => ({
+      ...entry,
+      captainLabel: userLabelMap.get(entry.captainUserId) ?? 'Player',
+    }));
+    const entryLabelById = new Map(entries.map((entry) => [entry.id, entry.captainLabel]));
+
     return {
       ...tournament,
+      entries,
       matches: tournament.matches.map((row) => {
         const linked = linkedMatchByTournamentMatchId.get(row.id);
         return {
           ...row,
+          resourceName: row.resourceId ? resourceNameById.get(row.resourceId) ?? 'Assigned resource' : null,
+          sideAEntryLabel: row.sideAEntryId ? entryLabelById.get(row.sideAEntryId) ?? 'Player' : null,
+          sideBEntryLabel: row.sideBEntryId ? entryLabelById.get(row.sideBEntryId) ?? 'Player' : null,
+          winnerEntryLabel: row.winnerEntryId ? entryLabelById.get(row.winnerEntryId) ?? 'Player' : null,
           matchId: linked?.id ?? null,
           linkedMatchStatus: linked?.status ?? null,
         };

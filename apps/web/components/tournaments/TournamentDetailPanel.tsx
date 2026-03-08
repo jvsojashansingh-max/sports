@@ -6,16 +6,21 @@ import { getAccessToken } from '@/lib/auth/session';
 
 type TournamentDetails = {
   id: string;
-  venueId: string;
   sportId: string;
   status: string;
   registrationDeadline: string;
   startTs: string;
   bracketVersion: number;
   conversationId: string | null;
+  venue: {
+    id: string;
+    name: string;
+    cityId: string;
+  };
   entries: Array<{
     id: string;
     captainUserId: string;
+    captainLabel: string;
     status: string;
     createdAt: string;
   }>;
@@ -27,10 +32,14 @@ type TournamentDetails = {
     sideBEntryId: string | null;
     winnerEntryId: string | null;
     resourceId: string | null;
+    resourceName: string | null;
     startTs: string | null;
     status: string;
     matchId: string | null;
     linkedMatchStatus: string | null;
+    sideAEntryLabel: string | null;
+    sideBEntryLabel: string | null;
+    winnerEntryLabel: string | null;
   }>;
   brackets: Array<{
     id: string;
@@ -70,8 +79,10 @@ export function TournamentDetailPanel({ tournamentId }: { tournamentId: string }
     <section className="page-card" style={{ display: 'grid', gap: 12 }}>
       {tournament ? (
         <>
-          <h1 className="page-title">Tournament {tournament.id}</h1>
-          <p className="page-subtitle">{tournament.sportId}</p>
+          <h1 className="page-title">Tournament</h1>
+          <p className="page-subtitle">
+            {tournament.sportId} at {tournament.venue.name}
+          </p>
           <p>Status: {tournament.status}</p>
           <p>Start: {formatTs(tournament.startTs)}</p>
           <p>Registration deadline: {formatTs(tournament.registrationDeadline)}</p>
@@ -117,8 +128,7 @@ export function TournamentDetailPanel({ tournamentId }: { tournamentId: string }
               {tournament.entries.length === 0 ? <p className="page-subtitle">No entries yet.</p> : null}
               {tournament.entries.map((entry) => (
                 <article key={entry.id} style={cardStyle}>
-                  <strong>{entry.id}</strong>
-                  <span>Captain: {entry.captainUserId}</span>
+                  <strong>{entry.captainLabel}</strong>
                   <span>Status: {entry.status}</span>
                 </article>
               ))}
@@ -136,12 +146,12 @@ export function TournamentDetailPanel({ tournamentId }: { tournamentId: string }
                   </strong>
                   <span>Status: {match.status}</span>
                   <span>
-                    Sides: {match.sideAEntryId ?? 'BYE'} vs {match.sideBEntryId ?? 'BYE'}
+                    Sides: {match.sideAEntryLabel ?? 'BYE'} vs {match.sideBEntryLabel ?? 'BYE'}
                   </span>
-                  <span>Winner: {match.winnerEntryId ?? 'Pending'}</span>
-                  <span>Resource: {match.resourceId ?? 'Needs manual scheduling'}</span>
+                  <span>Winner: {match.winnerEntryLabel ?? 'Pending'}</span>
+                  <span>Resource: {match.resourceName ?? 'Needs manual scheduling'}</span>
                   <span>Start: {match.startTs ? formatTs(match.startTs) : 'Unscheduled'}</span>
-                  <span>Result flow match: {match.matchId ?? 'Not linked'}</span>
+                  <span>Result flow: {match.matchId ? 'Linked' : 'Not linked yet'}</span>
                   <span>Linked match status: {match.linkedMatchStatus ?? 'N/A'}</span>
                   {match.matchId ? (
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>

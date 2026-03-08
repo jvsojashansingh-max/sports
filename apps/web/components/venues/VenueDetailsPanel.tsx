@@ -209,7 +209,7 @@ export function VenueDetailsPanel({ venueId }: { venueId: string }) {
                     teamMode: 'OWN_TEAM',
                   }),
                 });
-                setHoldMessage(`Challenge created: ${challenge.challengeId}`);
+                window.location.href = `/challenge/${challenge.challengeId}`;
               } catch (err) {
                 setHoldMessage(err instanceof Error ? err.message : 'Failed to create challenge');
               }

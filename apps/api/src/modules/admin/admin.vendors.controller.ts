@@ -6,6 +6,7 @@ import { RequireAction } from '../../common/decorators/require-action.decorator'
 import { RequireIdempotency } from '../../common/decorators/require-idempotency.decorator';
 import { AuditService } from '../../common/audit/audit.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { buildUserLabelMap } from '../../common/users/user-labels';
 
 class UpdateVendorStatusDto {
   reason?: string;
@@ -20,9 +21,9 @@ export class AdminVendorsController {
 
   @Get()
   @RequireAction('vendor.approval.review')
-  list(@Query('status') status = 'PENDING_APPROVAL') {
+  async list(@Query('status') status = 'PENDING_APPROVAL') {
     const parsed = parseVendorStatus(status);
-    return this.prisma.vendor.findMany({
+    const rows = await this.prisma.vendor.findMany({
       where: {
         status: parsed,
       },
@@ -38,6 +39,15 @@ export class AdminVendorsController {
         createdAt: true,
       },
     });
+    const userLabelMap = await buildUserLabelMap(
+      this.prisma,
+      rows.map((row) => row.ownerUserId),
+    );
+
+    return rows.map((row) => ({
+      ...row,
+      ownerLabel: userLabelMap.get(row.ownerUserId) ?? 'Vendor owner',
+    }));
   }
 
   @Post(':vendorId/approve')

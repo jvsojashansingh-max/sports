@@ -38,7 +38,6 @@ export function ProfilePanel() {
       {error ? <p>{error}</p> : null}
       {me ? (
         <>
-          <p>User ID: {me.id}</p>
           <p>Role: {me.role}</p>
           <p>Selected city: {getCityLabel(cityId || me.defaultCityId)}</p>
           <label htmlFor="cityId">Default city</label>

@@ -89,7 +89,6 @@ export function VendorFormatsPanel() {
       {rows.map((row) => (
         <article key={row.id} style={cardStyle}>
           <strong>{row.name}</strong>
-          <span>ID: {row.id}</span>
           <span>{row.sportId}</span>
           <span>{row.teamSize}v{row.teamSize} / {row.durationMinutes}m</span>
         </article>

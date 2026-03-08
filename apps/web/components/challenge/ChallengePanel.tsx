@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '@/lib/api/client';
 
 type ChallengeDetails = {
@@ -8,6 +8,10 @@ type ChallengeDetails = {
   status: string;
   joinDeadlineTs: string;
   checkinOpenTs: string;
+  inviteCandidates: Array<{
+    userId: string;
+    label: string;
+  }>;
   booking: {
     id: string;
     startTs: string;
@@ -30,9 +34,11 @@ type ChallengeDetails = {
     id: string;
     side: 'A' | 'B';
     captainUserId: string;
+    captainLabel: string;
     isOpenFill: boolean;
     members: Array<{
       userId: string;
+      label: string;
       status: string;
     }>;
   }>;
@@ -44,8 +50,8 @@ type ChallengeDetails = {
 
 export function ChallengePanel({ challengeId }: { challengeId: string }) {
   const [challenge, setChallenge] = useState<ChallengeDetails | null>(null);
-  const [inviteUserId, setInviteUserId] = useState('');
-  const [removeUserId, setRemoveUserId] = useState('');
+  const [inviteSelectionByTeamId, setInviteSelectionByTeamId] = useState<Record<string, string>>({});
+  const [removeSelectionByTeamId, setRemoveSelectionByTeamId] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -60,6 +66,8 @@ export function ChallengePanel({ challengeId }: { challengeId: string }) {
     refresh().catch((err) => setError(err instanceof Error ? err.message : 'Failed to load challenge'));
   }, [refresh]);
 
+  const inviteCandidates = useMemo(() => challenge?.inviteCandidates ?? [], [challenge]);
+
   if (!challenge && !error) {
     return <section className="page-card">Loading challenge...</section>;
   }
@@ -69,7 +77,7 @@ export function ChallengePanel({ challengeId }: { challengeId: string }) {
       {error ? <p>{error}</p> : null}
       {challenge ? (
         <>
-          <h1 className="page-title">Challenge {challenge.id}</h1>
+          <h1 className="page-title">Challenge</h1>
           <p className="page-subtitle">{challenge.booking.resource.venue.name}</p>
           <p>{challenge.booking.resource.venue.address}</p>
           <p>Resource: {challenge.booking.resource.name}</p>
@@ -114,8 +122,10 @@ export function ChallengePanel({ challengeId }: { challengeId: string }) {
                       body: JSON.stringify({}),
                     },
                   );
-                  setMessage(`Confirmed. Match ${res.matchId}`);
-                  await refresh();
+                  setMessage('Opponent confirmed. Match is ready.');
+                  if (res.conversationId) {
+                    await refresh();
+                  }
                 } catch (err) {
                   setMessage(err instanceof Error ? err.message : 'Confirm failed');
                 }
@@ -125,98 +135,134 @@ export function ChallengePanel({ challengeId }: { challengeId: string }) {
             </button>
           </div>
 
-          {challenge.teams.map((team) => (
-            <article key={team.id} style={cardStyle}>
-              <strong>Team {team.side}</strong>
-              <span>Captain: {team.captainUserId}</span>
-              <span>Open fill: {team.isOpenFill ? 'Yes' : 'No'}</span>
-              <span>
-                Members:{' '}
-                {team.members.length > 0
-                  ? team.members.map((member) => `${member.userId} (${member.status})`).join(', ')
-                  : 'None'}
-              </span>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <input
-                  value={inviteUserId}
-                  onChange={(event) => setInviteUserId(event.target.value)}
-                  style={inputStyle}
-                  placeholder="Invite userId"
-                />
-                <button
-                  style={buttonStyle}
-                  onClick={async () => {
-                    try {
-                      await apiRequest(`/teams/${team.id}/invite`, {
-                        method: 'POST',
-                        authenticated: true,
-                        idempotency: true,
-                        body: JSON.stringify({
-                          userId: inviteUserId,
-                        }),
-                      });
-                      setMessage('Invite sent.');
-                      setInviteUserId('');
-                      await refresh();
-                    } catch (err) {
-                      setMessage(err instanceof Error ? err.message : 'Invite failed');
+          {challenge.teams.map((team) => {
+            const removableMembers = team.members.filter((member) => member.userId !== team.captainUserId);
+            const selectedInviteUserId = inviteSelectionByTeamId[team.id] ?? '';
+            const selectedRemoveUserId = removeSelectionByTeamId[team.id] ?? '';
+
+            return (
+              <article key={team.id} style={cardStyle}>
+                <strong>Team {team.side}</strong>
+                <span>Captain: {team.captainLabel}</span>
+                <span>Open fill: {team.isOpenFill ? 'Yes' : 'No'}</span>
+                <span>
+                  Members:{' '}
+                  {team.members.length > 0
+                    ? team.members.map((member) => `${member.label} (${member.status})`).join(', ')
+                    : 'None'}
+                </span>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <select
+                    value={selectedInviteUserId}
+                    onChange={(event) =>
+                      setInviteSelectionByTeamId((current) => ({
+                        ...current,
+                        [team.id]: event.target.value,
+                      }))
                     }
-                  }}
-                >
-                  Invite
-                </button>
-              </div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <input
-                  value={removeUserId}
-                  onChange={(event) => setRemoveUserId(event.target.value)}
-                  style={inputStyle}
-                  placeholder="Remove userId"
-                />
-                <button
-                  style={buttonStyle}
-                  onClick={async () => {
-                    try {
-                      await apiRequest(`/teams/${team.id}/remove`, {
-                        method: 'POST',
-                        authenticated: true,
-                        idempotency: true,
-                        body: JSON.stringify({
-                          userId: removeUserId,
-                        }),
-                      });
-                      setMessage('Member removed.');
-                      setRemoveUserId('');
-                      await refresh();
-                    } catch (err) {
-                      setMessage(err instanceof Error ? err.message : 'Remove failed');
+                    style={inputStyle}
+                  >
+                    <option value="">Invite a player</option>
+                    {inviteCandidates.map((candidate) => (
+                      <option key={candidate.userId} value={candidate.userId}>
+                        {candidate.label}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    style={buttonStyle}
+                    disabled={!selectedInviteUserId}
+                    onClick={async () => {
+                      try {
+                        await apiRequest(`/teams/${team.id}/invite`, {
+                          method: 'POST',
+                          authenticated: true,
+                          idempotency: true,
+                          body: JSON.stringify({
+                            userId: selectedInviteUserId,
+                          }),
+                        });
+                        setMessage('Invite sent.');
+                        setInviteSelectionByTeamId((current) => ({
+                          ...current,
+                          [team.id]: '',
+                        }));
+                        await refresh();
+                      } catch (err) {
+                        setMessage(err instanceof Error ? err.message : 'Invite failed');
+                      }
+                    }}
+                  >
+                    Invite
+                  </button>
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <select
+                    value={selectedRemoveUserId}
+                    onChange={(event) =>
+                      setRemoveSelectionByTeamId((current) => ({
+                        ...current,
+                        [team.id]: event.target.value,
+                      }))
                     }
-                  }}
-                >
-                  Remove
-                </button>
-                <button
-                  style={buttonStyle}
-                  onClick={async () => {
-                    try {
-                      await apiRequest(`/teams/${team.id}/join`, {
-                        method: 'POST',
-                        authenticated: true,
-                        idempotency: true,
-                        body: JSON.stringify({}),
-                      });
-                      setMessage('Joined team.');
-                      await refresh();
-                    } catch (err) {
-                      setMessage(err instanceof Error ? err.message : 'Join failed');
-                    }
-                  }}
-                >
-                  Join Open Team
-                </button>
-              </div>
-            </article>
-          ))}
+                    style={inputStyle}
+                  >
+                    <option value="">Remove a member</option>
+                    {removableMembers.map((member) => (
+                      <option key={member.userId} value={member.userId}>
+                        {member.label} ({member.status})
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    style={buttonStyle}
+                    disabled={!selectedRemoveUserId}
+                    onClick={async () => {
+                      try {
+                        await apiRequest(`/teams/${team.id}/remove`, {
+                          method: 'POST',
+                          authenticated: true,
+                          idempotency: true,
+                          body: JSON.stringify({
+                            userId: selectedRemoveUserId,
+                          }),
+                        });
+                        setMessage('Member removed.');
+                        setRemoveSelectionByTeamId((current) => ({
+                          ...current,
+                          [team.id]: '',
+                        }));
+                        await refresh();
+                      } catch (err) {
+                        setMessage(err instanceof Error ? err.message : 'Remove failed');
+                      }
+                    }}
+                  >
+                    Remove
+                  </button>
+                  <button
+                    style={buttonStyle}
+                    onClick={async () => {
+                      try {
+                        await apiRequest(`/teams/${team.id}/join`, {
+                          method: 'POST',
+                          authenticated: true,
+                          idempotency: true,
+                          body: JSON.stringify({}),
+                        });
+                        setMessage('Joined team.');
+                        await refresh();
+                      } catch (err) {
+                        setMessage(err instanceof Error ? err.message : 'Join failed');
+                      }
+                    }}
+                  >
+                    Join Open Team
+                  </button>
+                </div>
+              </article>
+            );
+          })}
 
           {challenge.conversation ? (
             <a href={`/chat/${challenge.conversation.id}`} style={cardStyle}>

@@ -133,7 +133,7 @@ function ChallengeSection({ title, subtitle, rows }: { title: string; subtitle: 
               Team B: {sideB?.memberCount ?? 0}
               {sideB?.isOpenFill ? ' (open fill)' : ''}
             </span>
-            {row.match ? <span>Match: {row.match.id} · {row.match.status}</span> : <span>Match: not created yet</span>}
+            {row.match ? <span>Match ready · {row.match.status}</span> : <span>Match: not created yet</span>}
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               <a href={`/challenge/${row.id}`} style={linkStyle}>Open challenge</a>
               {row.conversation ? <a href={`/chat/${row.conversation.id}`} style={linkStyle}>Open chat</a> : null}

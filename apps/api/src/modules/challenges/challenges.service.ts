@@ -15,6 +15,7 @@ import {
   Prisma,
   TeamMemberStatus,
   TeamSide,
+  UserRole,
   UserStatus,
 } from '@prisma/client';
 import type { RequestUser } from '../../common/auth/request-user';
@@ -25,6 +26,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { ChatGateway } from '../chat/chat.gateway';
 import { isSlotBoundaryValid } from './challenges.slot-boundary';
 import { deriveChallengeTimes } from './challenges.time';
+import { buildUserLabelMap } from '../../common/users/user-labels';
 import type {
   CreateChallengeDto,
   InviteTeamMemberDto,
@@ -429,7 +431,76 @@ export class ChallengesService {
       throw new NotFoundException('NOT_FOUND');
     }
 
-    return challenge;
+    const assignedUserIds = Array.from(
+      new Set([
+        ...challenge.teams.map((team) => team.captainUserId),
+        ...challenge.teams.flatMap((team) => team.members.map((member) => member.userId)),
+      ]),
+    );
+
+    let inviteCandidates = await this.prisma.user.findMany({
+      where: {
+        deletedAt: null,
+        status: UserStatus.ACTIVE,
+        role: {
+          in: [UserRole.PLAYER, UserRole.VENDOR_OWNER],
+        },
+        id: {
+          notIn: assignedUserIds,
+        },
+        ...(challenge.booking.resource.venue.cityId
+          ? {
+              defaultCityId: challenge.booking.resource.venue.cityId,
+            }
+          : {}),
+      },
+      orderBy: [{ displayName: 'asc' }, { createdAt: 'asc' }],
+      take: 20,
+      select: {
+        id: true,
+      },
+    });
+
+    if (inviteCandidates.length === 0 && challenge.booking.resource.venue.cityId) {
+      inviteCandidates = await this.prisma.user.findMany({
+        where: {
+          deletedAt: null,
+          status: UserStatus.ACTIVE,
+          role: {
+            in: [UserRole.PLAYER, UserRole.VENDOR_OWNER],
+          },
+          id: {
+            notIn: assignedUserIds,
+          },
+        },
+        orderBy: [{ displayName: 'asc' }, { createdAt: 'asc' }],
+        take: 20,
+        select: {
+          id: true,
+        },
+      });
+    }
+
+    const userLabelMap = await buildUserLabelMap(this.prisma, [
+      ...assignedUserIds,
+      ...inviteCandidates.map((row) => row.id),
+    ]);
+
+    return {
+      ...challenge,
+      teams: challenge.teams.map((team) => ({
+        ...team,
+        captainLabel: userLabelMap.get(team.captainUserId) ?? 'Captain',
+        members: team.members.map((member) => ({
+          ...member,
+          label: userLabelMap.get(member.userId) ?? 'Player',
+        })),
+      })),
+      inviteCandidates: inviteCandidates.map((candidate) => ({
+        userId: candidate.id,
+        label: userLabelMap.get(candidate.id) ?? 'Player',
+      })),
+    };
   }
 
   async accept(user: RequestUser, challengeId: string) {

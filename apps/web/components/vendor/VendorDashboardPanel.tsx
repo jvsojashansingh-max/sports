@@ -41,8 +41,10 @@ type VendorChallengeRow = {
 
 type TournamentRow = {
   id: string;
-  venueId: string;
   status: string;
+  venue: {
+    id: string;
+  };
 };
 
 export function VendorDashboardPanel() {
@@ -87,7 +89,7 @@ export function VendorDashboardPanel() {
         setVenues(vendorVenues);
         setResources(vendorResources);
         setChallenges(vendorChallenges);
-        setTournaments(allTournaments.filter((tournament) => venueIds.has(tournament.venueId)));
+        setTournaments(allTournaments.filter((tournament) => venueIds.has(tournament.venue.id)));
       } catch (loadError) {
         if (!active) {
           return;

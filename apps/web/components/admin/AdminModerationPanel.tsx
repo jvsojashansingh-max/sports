@@ -7,6 +7,7 @@ type MessageReportRow = {
   id: string;
   messageId: string;
   reportedByUserId: string;
+  reporterLabel: string;
   reason: string;
   status: 'OPEN' | 'ACTIONED' | 'DISMISSED';
 };
@@ -30,9 +31,7 @@ export function AdminModerationPanel() {
       <p className="page-subtitle">Review player-reported messages.</p>
       {rows.map((row) => (
         <article key={row.id} style={cardStyle}>
-          <strong>{row.id}</strong>
-          <span>Message: {row.messageId}</span>
-          <span>By: {row.reportedByUserId}</span>
+          <strong>{row.reporterLabel}</strong>
           <span>Reason: {row.reason}</span>
           <span>Status: {row.status}</span>
           <div style={{ display: 'flex', gap: 8 }}>

@@ -24,6 +24,7 @@ import type {
   SendMessageDto,
 } from './chat.dto';
 import { ChatGateway } from './chat.gateway';
+import { buildUserLabelMap } from '../../common/users/user-labels';
 
 @Injectable()
 export class ChatService {
@@ -181,25 +182,101 @@ export class ChatService {
   async listMessages(user: RequestUser, conversationId: string, query: ListMessagesQueryDto) {
     await this.assertParticipant(user.id, conversationId);
 
-    const rows = await this.prisma.message.findMany({
-      where: {
-        conversationId,
-        deletedAt: null,
-        ...(query.cursor ? { createdAt: { lt: new Date(query.cursor) } } : {}),
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-      take: 50,
-    });
+    const [rows, participants, conversation] = await Promise.all([
+      this.prisma.message.findMany({
+        where: {
+          conversationId,
+          deletedAt: null,
+          ...(query.cursor ? { createdAt: { lt: new Date(query.cursor) } } : {}),
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+        take: 50,
+      }),
+      this.prisma.conversationParticipant.findMany({
+        where: {
+          conversationId,
+          deletedAt: null,
+        },
+        orderBy: [{ roleInChat: 'desc' }, { createdAt: 'asc' }],
+      }),
+      this.prisma.conversation.findFirst({
+        where: {
+          id: conversationId,
+          deletedAt: null,
+        },
+        include: {
+          challenge: {
+            include: {
+              booking: {
+                include: {
+                  resource: {
+                    include: {
+                      venue: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+          tournament: {
+            include: {
+              venue: {
+                select: {
+                  name: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+    ]);
+
+    const supportVenueIds =
+      conversation?.type === ConversationType.VENUE_SUPPORT && conversation.venueId
+        ? [conversation.venueId]
+        : [];
+    const supportVenues = supportVenueIds.length
+      ? await this.prisma.venue.findMany({
+          where: {
+            id: {
+              in: supportVenueIds,
+            },
+          },
+          select: {
+            id: true,
+            name: true,
+          },
+        })
+      : [];
+    const venueNameById = new Map(supportVenues.map((row) => [row.id, row.name]));
+    const userLabelMap = await buildUserLabelMap(
+      this.prisma,
+      Array.from(
+        new Set([
+          ...rows.map((row) => row.senderUserId),
+          ...participants.map((row) => row.userId),
+        ]),
+      ),
+    );
 
     return {
+      title: conversation ? resolveConversationTitle({ conversation }, venueNameById) : 'Conversation',
+      type: conversation?.type ?? ConversationType.CHALLENGE,
       messages: rows.reverse().map((row) => ({
         ...row,
+        senderLabel: userLabelMap.get(row.senderUserId) ?? 'Player',
         body:
           row.status === MessageStatus.DELETED_BY_MOD || row.status === MessageStatus.DELETED_BY_USER
             ? '[Message removed]'
             : row.body,
+      })),
+      participants: participants.map((row) => ({
+        userId: row.userId,
+        label: userLabelMap.get(row.userId) ?? 'Player',
+        roleInChat: row.roleInChat,
+        mutedUntil: row.mutedUntil?.toISOString() ?? null,
       })),
       nextCursor: rows.length === 50 ? rows[rows.length - 1].createdAt.toISOString() : null,
     };
@@ -396,7 +473,7 @@ export class ChatService {
   }
 
   async listMessageReports(status?: MessageReportStatus) {
-    return this.prisma.messageReport.findMany({
+    const reports = await this.prisma.messageReport.findMany({
       where: {
         ...(status ? { status } : {}),
       },
@@ -405,6 +482,15 @@ export class ChatService {
       },
       take: 200,
     });
+    const userLabelMap = await buildUserLabelMap(
+      this.prisma,
+      reports.map((row) => row.reportedByUserId),
+    );
+
+    return reports.map((row) => ({
+      ...row,
+      reporterLabel: userLabelMap.get(row.reportedByUserId) ?? 'Player',
+    }));
   }
 
   async reviewMessageReport(

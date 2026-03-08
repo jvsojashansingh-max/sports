@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { LeaderboardScope, LeaderboardWindow, SportId } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { ListLeaderboardsQueryDto, UpsertLevelThresholdDto } from './stats.dto';
+import { buildUserLabelMap } from '../../common/users/user-labels';
 
 @Injectable()
 export class StatsService {
@@ -51,9 +52,24 @@ export class StatsService {
       },
     });
     if (snapshot) {
+      const snapshotRows = Array.isArray(snapshot.rows) ? snapshot.rows : [];
+      const snapshotUserIds = snapshotRows
+        .map((row) => (row && typeof row === 'object' && 'userId' in row ? (row as { userId?: string }).userId : null))
+        .filter((value): value is string => Boolean(value));
+      const userLabelMap = await buildUserLabelMap(this.prisma, snapshotUserIds);
+
       return {
         source: 'snapshot',
-        rows: snapshot.rows,
+        rows: snapshotRows.map((row) => {
+          if (!row || typeof row !== 'object' || !('userId' in row)) {
+            return row;
+          }
+          const record = row as Record<string, unknown> & { userId?: string };
+          return {
+            ...record,
+            userLabel: record.userId ? userLabelMap.get(record.userId) ?? 'Player' : 'Player',
+          };
+        }),
       };
     }
 
@@ -73,9 +89,17 @@ export class StatsService {
       },
     });
 
+    const userLabelMap = await buildUserLabelMap(
+      this.prisma,
+      liveRows.map((row) => row.userId),
+    );
+
     return {
       source: 'live',
-      rows: liveRows,
+      rows: liveRows.map((row) => ({
+        ...row,
+        userLabel: userLabelMap.get(row.userId) ?? 'Player',
+      })),
     };
   }
 
