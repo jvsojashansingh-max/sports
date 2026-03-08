@@ -239,6 +239,19 @@ export class VenuesService {
       },
     });
 
+    if (this.shouldAutoSeedAvailabilityTemplates()) {
+      await this.prisma.availabilityTemplate.createMany({
+        data: Array.from({ length: 7 }, (_, dayOfWeek) => ({
+          resourceId: resource.id,
+          dayOfWeek,
+          startMinute: 6 * 60,
+          endMinute: 22 * 60,
+          slotMinutes: 60,
+          bufferMinutes: 0,
+        })),
+      });
+    }
+
     await this.audit.log({
       actorUserId: ownerUserId,
       action: 'resource.create',
@@ -248,6 +261,7 @@ export class VenuesService {
       afterJson: {
         venueId: resource.venueId,
         sportId: resource.sportId,
+        seededDefaultAvailability: this.shouldAutoSeedAvailabilityTemplates(),
       },
     });
 
@@ -311,6 +325,10 @@ export class VenuesService {
   }
 
   private shouldAutoPublishVenue(): boolean {
+    return process.env.OTP_PROVIDER === 'stub' || process.env.VENDOR_AUTO_APPROVE === 'true';
+  }
+
+  private shouldAutoSeedAvailabilityTemplates(): boolean {
     return process.env.OTP_PROVIDER === 'stub' || process.env.VENDOR_AUTO_APPROVE === 'true';
   }
 }
