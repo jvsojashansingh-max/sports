@@ -202,6 +202,115 @@ export class ChallengesService {
     }
   }
 
+  async listManagedChallenges(user: RequestUser) {
+    const vendor = await this.mustGetManagedVendor(user);
+    const rows = await this.prisma.challenge.findMany({
+      where: {
+        deletedAt: null,
+        booking: {
+          resource: {
+            venue: {
+              vendorId: vendor.id,
+            },
+          },
+        },
+      },
+      include: {
+        booking: {
+          include: {
+            resource: {
+              include: {
+                venue: true,
+              },
+            },
+          },
+        },
+        format: {
+          select: {
+            id: true,
+            name: true,
+            sportId: true,
+            teamSize: true,
+            refereeAllowed: true,
+          },
+        },
+        teams: {
+          where: {
+            deletedAt: null,
+          },
+          include: {
+            members: {
+              where: {
+                deletedAt: null,
+                status: {
+                  not: TeamMemberStatus.REMOVED,
+                },
+              },
+            },
+          },
+          orderBy: {
+            side: 'asc',
+          },
+        },
+        match: {
+          select: {
+            id: true,
+            status: true,
+          },
+        },
+        conversation: {
+          select: {
+            id: true,
+            status: true,
+          },
+        },
+      },
+      orderBy: {
+        booking: {
+          startTs: 'asc',
+        },
+      },
+      take: 200,
+    });
+
+    return rows.map((row) => ({
+      id: row.id,
+      status: row.status,
+      paymentStatus: row.paymentStatus,
+      createdAt: row.createdAt,
+      createdByUserId: row.createdByUserId,
+      joinDeadlineTs: row.joinDeadlineTs,
+      checkinOpenTs: row.checkinOpenTs,
+      format: row.format,
+      booking: {
+        id: row.booking.id,
+        status: row.booking.status,
+        startTs: row.booking.startTs,
+        endTs: row.booking.endTs,
+        resource: {
+          id: row.booking.resource.id,
+          name: row.booking.resource.name,
+          sportId: row.booking.resource.sportId,
+          venue: {
+            id: row.booking.resource.venue.id,
+            name: row.booking.resource.venue.name,
+            cityId: row.booking.resource.venue.cityId,
+            address: row.booking.resource.venue.address,
+          },
+        },
+      },
+      teams: row.teams.map((team) => ({
+        id: team.id,
+        side: team.side,
+        captainUserId: team.captainUserId,
+        isOpenFill: team.isOpenFill,
+        memberCount: team.members.length,
+      })),
+      match: row.match,
+      conversation: row.conversation,
+    }));
+  }
+
   async lobby(query: LobbyChallengesQueryDto) {
     const cacheKey = `lobby:${query.cityId}:${query.sportId}:${query.fromTs}:${query.toTs}`;
     const cached = await this.cache.getJson<{ challenges: unknown[] }>(cacheKey);
@@ -833,6 +942,23 @@ export class ChallengesService {
 
   private async clearLobbyCache() {
     await this.cache.deleteByPrefix('lobby:');
+  }
+
+  private async mustGetManagedVendor(user: RequestUser) {
+    const vendor = await this.prisma.vendor.findFirst({
+      where: {
+        status: 'APPROVED',
+        OR: [{ ownerUserId: user.id }, ...(user.vendorId ? [{ id: user.vendorId }] : [])],
+      },
+      select: {
+        id: true,
+        ownerUserId: true,
+      },
+    });
+    if (!vendor) {
+      throw new ForbiddenException('FORBIDDEN');
+    }
+    return vendor;
   }
 
   private assertRateLimit(

@@ -1,5 +1,5 @@
-import { VendorRegisterPanel } from '@/components/vendor/VendorRegisterPanel';
+import { VendorDashboardPanel } from '@/components/vendor/VendorDashboardPanel';
 
 export default function VendorPage() {
-  return <VendorRegisterPanel />;
+  return <VendorDashboardPanel />;
 }

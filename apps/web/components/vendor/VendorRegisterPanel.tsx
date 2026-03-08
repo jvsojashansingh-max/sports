@@ -67,6 +67,7 @@ export function VendorRegisterPanel() {
         <div style={{ display: 'grid', gap: 8 }}>
           <a href="/vendor/settings" style={linkStyle}>Create venues and resources</a>
           <a href="/vendor/formats" style={linkStyle}>Create formats</a>
+          <a href="/vendor/challenges" style={linkStyle}>Handle challenges and requests</a>
           <a href="/vendor/schedule" style={linkStyle}>Manage schedule</a>
           <a href="/vendor/tournaments" style={linkStyle}>Create tournaments</a>
         </div>

@@ -21,7 +21,7 @@ type BlockRow = {
   reason: string;
 };
 
-export function VendorSchedulePanel() {
+export function VendorSchedulePanel({ initialMatchId = '' }: { initialMatchId?: string }) {
   const [templates, setTemplates] = useState<AvailabilityTemplate[]>([]);
   const [blocks, setBlocks] = useState<BlockRow[]>([]);
   const [message, setMessage] = useState<string | null>(null);
@@ -43,6 +43,7 @@ export function VendorSchedulePanel() {
   const [opsPresent, setOpsPresent] = useState(true);
   const [opsWinnerSide, setOpsWinnerSide] = useState<'A' | 'B'>('A');
   const [opsPaymentStatus, setOpsPaymentStatus] = useState<'UNKNOWN' | 'PAID' | 'UNPAID'>('UNKNOWN');
+  const linkedMatchId = initialMatchId.trim();
 
   async function refresh() {
     const [templateRows, blockRows] = await Promise.all([
@@ -56,6 +57,12 @@ export function VendorSchedulePanel() {
   useEffect(() => {
     refresh().catch((err) => setMessage(err instanceof Error ? err.message : 'Failed to load schedule data'));
   }, []);
+
+  useEffect(() => {
+    if (linkedMatchId) {
+      setOpsMatchId(linkedMatchId);
+    }
+  }, [linkedMatchId]);
 
   async function createTemplate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -151,6 +158,7 @@ export function VendorSchedulePanel() {
 
       <h2 style={{ margin: 0 }}>Match-Day Ops</h2>
       <div style={{ display: 'grid', gap: 8 }}>
+        {linkedMatchId ? <p className="page-subtitle">Loaded from challenge board for match {linkedMatchId}.</p> : null}
         <input
           placeholder="Match ID"
           value={opsMatchId}

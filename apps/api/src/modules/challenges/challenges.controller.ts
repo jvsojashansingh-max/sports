@@ -22,6 +22,12 @@ export class ChallengesController {
     return this.challengesService.create(user, body);
   }
 
+  @Get('vendor/challenges')
+  @RequireAction('vendor.venue.manage')
+  listVendorChallenges(@CurrentUser() user: RequestUser) {
+    return this.challengesService.listManagedChallenges(user);
+  }
+
   @Get('challenges/:id')
   @RequireAction('challenge.view')
   getById(@Param('id') id: string) {
