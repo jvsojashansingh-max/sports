@@ -82,6 +82,13 @@ test('stub mode auto-approves vendor registration and unlocks onboarding immedia
     });
 
     assert.equal(createdVenue.name, 'Stub Arena');
+    assert.equal(createdVenue.status, VenueStatus.LIVE);
+
+    const visibleVenues = await venuesService.listPlayerVenues({
+      cityId: '00000000-0000-4000-8000-0000000003e9',
+    });
+    assert.equal(visibleVenues.length, 1);
+    assert.equal(visibleVenues[0]?.id, createdVenue.id);
   } finally {
     if (previousOtpProvider === undefined) {
       delete process.env.OTP_PROVIDER;
@@ -194,7 +201,7 @@ function createFakePrisma() {
           cityId: data.cityId,
           stateId: data.stateId,
           address: data.address,
-          status: VenueStatus.DRAFT,
+          status: data.status ?? VenueStatus.DRAFT,
           deletedAt: null,
           createdAt: new Date(),
         };

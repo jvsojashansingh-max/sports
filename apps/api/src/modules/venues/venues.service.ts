@@ -122,6 +122,7 @@ export class VenuesService {
 
   async createVenue(ownerUserId: string, dto: CreateVenueDto) {
     const vendor = await this.mustGetApprovedVendor(ownerUserId);
+    const status = this.shouldAutoPublishVenue() ? VenueStatus.LIVE : VenueStatus.DRAFT;
 
     const venue = await this.prisma.venue.create({
       data: {
@@ -136,6 +137,7 @@ export class VenuesService {
         paymentInstructions: dto.paymentInstructions,
         paymentMode: dto.paymentMode,
         vendorPaymentLink: dto.vendorPaymentLink,
+        status,
       },
     });
 
@@ -148,6 +150,7 @@ export class VenuesService {
       afterJson: {
         venueId: venue.id,
         vendorId: vendor.id,
+        status: venue.status,
       },
     });
 
@@ -305,5 +308,9 @@ export class VenuesService {
     }
 
     return vendor;
+  }
+
+  private shouldAutoPublishVenue(): boolean {
+    return process.env.OTP_PROVIDER === 'stub' || process.env.VENDOR_AUTO_APPROVE === 'true';
   }
 }

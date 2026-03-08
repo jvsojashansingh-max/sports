@@ -59,13 +59,17 @@ export function VendorSetupPanel() {
   async function submitVenue(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     try {
-      await apiRequest('/vendor/venues', {
+      const createdVenue = await apiRequest<Venue>('/vendor/venues', {
         method: 'POST',
         authenticated: true,
         idempotency: true,
         body: JSON.stringify({ name, cityId, stateId, address }),
       });
-      setMessage('Venue created.');
+      setMessage(
+        createdVenue.status === 'LIVE'
+          ? 'Venue created and published live.'
+          : `Venue created in ${createdVenue.status.toLowerCase()} status.`,
+      );
       setName('');
       setAddress('');
       await refresh();
@@ -93,6 +97,21 @@ export function VendorSetupPanel() {
       await refresh();
     } catch (err) {
       setMessage(err instanceof Error ? err.message : 'Failed to create resource');
+    }
+  }
+
+  async function updateVenueStatus(venueId: string, status: 'DRAFT' | 'LIVE') {
+    try {
+      await apiRequest(`/vendor/venues/${venueId}`, {
+        method: 'PATCH',
+        authenticated: true,
+        idempotency: true,
+        body: JSON.stringify({ status }),
+      });
+      setMessage(status === 'LIVE' ? 'Venue published live.' : 'Venue moved back to draft.');
+      await refresh();
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Failed to update venue status');
     }
   }
 
@@ -142,6 +161,17 @@ export function VendorSetupPanel() {
           <strong>{venue.name}</strong>
           <span>{getCityLabel(venue.cityId)}</span>
           <span>{venue.status}</span>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {venue.status !== 'LIVE' ? (
+              <button type="button" style={buttonStyle} onClick={() => updateVenueStatus(venue.id, 'LIVE')}>
+                Publish Live
+              </button>
+            ) : (
+              <button type="button" style={buttonStyle} onClick={() => updateVenueStatus(venue.id, 'DRAFT')}>
+                Move To Draft
+              </button>
+            )}
+          </div>
         </article>
       ))}
 
