@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { apiRequest } from '@/lib/api/client';
 import { DEFAULT_CITY_ID, INDIA_DEMO_CITIES, getCityLabel } from '@/lib/indiaCities';
+import { VendorRegisterPanel } from './VendorRegisterPanel';
 
 type Venue = {
   id: string;
@@ -20,10 +21,19 @@ type Resource = {
   status: string;
 };
 
+type MeResponse = {
+  id: string;
+  role: 'PLAYER' | 'VENDOR_OWNER' | 'VENDOR_STAFF' | 'ADMIN';
+  vendorId: string | null;
+  defaultCityId: string | null;
+};
+
 export function VendorSetupPanel() {
+  const [me, setMe] = useState<MeResponse | null>(null);
   const [venues, setVenues] = useState<Venue[]>([]);
   const [resources, setResources] = useState<Resource[]>([]);
   const [message, setMessage] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const [name, setName] = useState('');
   const [cityId, setCityId] = useState(DEFAULT_CITY_ID);
@@ -35,6 +45,20 @@ export function VendorSetupPanel() {
   const [capacity, setCapacity] = useState('2');
 
   const refresh = useCallback(async () => {
+    const profile = await apiRequest<MeResponse>('/me', { authenticated: true });
+    setMe(profile);
+
+    const isVendor =
+      profile.role === 'VENDOR_OWNER' ||
+      profile.role === 'VENDOR_STAFF' ||
+      Boolean(profile.vendorId);
+
+    if (!isVendor) {
+      setVenues([]);
+      setResources([]);
+      return;
+    }
+
     const [venueList, resourceList] = await Promise.all([
       apiRequest<Venue[]>('/vendor/venues', { authenticated: true }),
       apiRequest<Resource[]>('/vendor/resources', { authenticated: true }),
@@ -50,11 +74,26 @@ export function VendorSetupPanel() {
   }, []);
 
   useEffect(() => {
-    refresh().catch((err) => setMessage(err instanceof Error ? err.message : 'Failed to load vendor data'));
+    setLoading(true);
+    refresh()
+      .catch((err) => setMessage(err instanceof Error ? err.message : 'Failed to load vendor data'))
+      .finally(() => setLoading(false));
   }, [refresh]);
 
   const selectedCity = INDIA_DEMO_CITIES.find((city) => city.id === cityId) ?? INDIA_DEMO_CITIES[0];
   const stateId = selectedCity.stateId;
+  const isVendor =
+    me?.role === 'VENDOR_OWNER' ||
+    me?.role === 'VENDOR_STAFF' ||
+    Boolean(me?.vendorId);
+
+  if (loading) {
+    return <section className="page-card">Loading vendor setup...</section>;
+  }
+
+  if (!isVendor) {
+    return <VendorRegisterPanel />;
+  }
 
   async function submitVenue(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
