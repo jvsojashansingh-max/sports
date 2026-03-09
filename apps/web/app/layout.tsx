@@ -19,6 +19,7 @@ export default function RootLayout({
             <a href="/lobby">Lobby</a>
             <a href="/auth">Auth</a>
             <a href="/book">Book</a>
+            <a href="/matches">Matches</a>
             <a href="/tournaments">Tournaments</a>
             <a href="/leaderboard">Leaderboard</a>
             <a href="/profile">Profile</a>

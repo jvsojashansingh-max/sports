@@ -14,6 +14,11 @@ export class UsersController {
     return this.usersService.getMe(user.id);
   }
 
+  @Get('activity')
+  activity(@CurrentUser() user: RequestUser) {
+    return this.usersService.getActivity(user.id);
+  }
+
   @Patch()
   @RequireIdempotency()
   update(@CurrentUser() user: RequestUser, @Body() body: UpdateMeDto) {

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   ConflictException,
   ForbiddenException,
@@ -505,238 +506,286 @@ export class ChallengesService {
 
   async accept(user: RequestUser, challengeId: string) {
     this.assertRateLimit(user.id, this.acceptWindow, 20, 60_000);
+    let advancedStatus = false;
 
-    const accepted = await this.prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT "id" FROM "challenges" WHERE "id" = ${challengeId} FOR UPDATE`;
-
-      const challenge = await tx.challenge.findFirst({
-        where: {
-          id: challengeId,
-          deletedAt: null,
-        },
-        include: {
-          teams: {
-            where: {
-              deletedAt: null,
-            },
-            include: {
-              members: {
-                where: {
-                  deletedAt: null,
-                },
+    const challenge = await this.prisma.challenge.findFirst({
+      where: {
+        id: challengeId,
+        deletedAt: null,
+      },
+      include: {
+        teams: {
+          where: {
+            deletedAt: null,
+          },
+          include: {
+            members: {
+              where: {
+                deletedAt: null,
               },
             },
           },
-          booking: true,
         },
-      });
+        booking: true,
+      },
+    });
 
-      if (!challenge) {
-        throw new NotFoundException('NOT_FOUND');
-      }
-      if (challenge.status !== ChallengeStatus.WAITING_OPPONENT) {
-        throw new ConflictException('CONFLICT');
-      }
-      if (challenge.joinDeadlineTs <= new Date()) {
-        await tx.challenge.update({
+    if (!challenge) {
+      throw new NotFoundException('NOT_FOUND');
+    }
+    if (challenge.status !== ChallengeStatus.WAITING_OPPONENT) {
+      throw new ConflictException('CONFLICT');
+    }
+    if (challenge.joinDeadlineTs <= new Date()) {
+      await this.prisma.$transaction([
+        this.prisma.challenge.update({
           where: { id: challenge.id },
           data: { status: ChallengeStatus.CANCELLED },
-        });
-        await tx.booking.update({
+        }),
+        this.prisma.booking.update({
           where: { id: challenge.bookingId },
           data: { status: BookingStatus.CANCELLED },
-        });
-        throw new ConflictException('CONFLICT');
-      }
-      if (challenge.createdByUserId === user.id) {
-        throw new ConflictException('CONFLICT');
-      }
-      if (challenge.teams.some((team) => team.side === TeamSide.B)) {
-        throw new ConflictException('CONFLICT');
-      }
+        }),
+      ]);
+      throw new ConflictException('CONFLICT');
+    }
+    if (challenge.createdByUserId === user.id) {
+      throw new ConflictException('CONFLICT');
+    }
+    if (challenge.teams.some((team) => team.side === TeamSide.B)) {
+      throw new ConflictException('CONFLICT');
+    }
 
-      const existingMembership = challenge.teams.flatMap((team) => team.members).find((member) => {
-        return member.userId === user.id && member.status !== TeamMemberStatus.REMOVED;
-      });
-      if (existingMembership) {
-        throw new ConflictException('CONFLICT');
-      }
+    const existingMembership = challenge.teams.flatMap((team) => team.members).find((member) => {
+      return member.userId === user.id && member.status !== TeamMemberStatus.REMOVED;
+    });
+    if (existingMembership) {
+      throw new ConflictException('CONFLICT');
+    }
 
-      const teamB = await tx.team.create({
-        data: {
-          challengeId: challenge.id,
-          side: TeamSide.B,
-          captainUserId: user.id,
-          isOpenFill: false,
-        },
-      });
-      await tx.teamMember.create({
-        data: {
-          teamId: teamB.id,
-          userId: user.id,
-          status: TeamMemberStatus.ACCEPTED,
-        },
-      });
-      const updated = await tx.challenge.update({
+    try {
+      const teamBId = randomUUID();
+      const updateResult = await this.prisma.challenge.updateMany({
         where: {
           id: challenge.id,
+          status: ChallengeStatus.WAITING_OPPONENT,
         },
         data: {
           status: ChallengeStatus.OPPONENT_REQUESTED,
         },
       });
+      if (updateResult.count !== 1) {
+        throw new ConflictException('CONFLICT');
+      }
+      advancedStatus = true;
 
-      return updated;
-    });
+      await this.prisma.$transaction([
+        this.prisma.team.create({
+          data: {
+            id: teamBId,
+            challengeId: challenge.id,
+            side: TeamSide.B,
+            captainUserId: user.id,
+            isOpenFill: false,
+          },
+        }),
+        this.prisma.teamMember.create({
+          data: {
+            teamId: teamBId,
+            userId: user.id,
+            status: TeamMemberStatus.ACCEPTED,
+          },
+        }),
+      ]);
 
-    await this.clearLobbyCache();
-    await this.audit.log({
-      actorUserId: user.id,
-      action: 'challenge.accept',
-      objectType: 'challenge',
-      objectId: accepted.id,
-      beforeJson: {
-        status: ChallengeStatus.WAITING_OPPONENT,
-      },
-      afterJson: {
-        status: accepted.status,
-      },
-    });
-    this.metrics.incrementCounter('challenge_accepted_total');
+      await this.clearLobbyCache();
+      await this.audit.log({
+        actorUserId: user.id,
+        action: 'challenge.accept',
+        objectType: 'challenge',
+        objectId: challenge.id,
+        beforeJson: {
+          status: ChallengeStatus.WAITING_OPPONENT,
+        },
+        afterJson: {
+          status: ChallengeStatus.OPPONENT_REQUESTED,
+        },
+      });
+      this.metrics.incrementCounter('challenge_accepted_total');
 
-    return {
-      challengeId: accepted.id,
-      status: accepted.status,
-    };
+      return {
+        challengeId: challenge.id,
+        status: ChallengeStatus.OPPONENT_REQUESTED,
+      };
+    } catch (error) {
+      if (advancedStatus) {
+        await this.prisma.challenge.updateMany({
+          where: {
+            id: challenge.id,
+            status: ChallengeStatus.OPPONENT_REQUESTED,
+          },
+          data: {
+            status: ChallengeStatus.WAITING_OPPONENT,
+          },
+        });
+      }
+      if (isTeamAcceptConflictError(error)) {
+        throw new ConflictException('CONFLICT');
+      }
+      throw error;
+    }
   }
 
   async confirmOpponent(user: RequestUser, challengeId: string) {
-    const result = await this.prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT "id" FROM "challenges" WHERE "id" = ${challengeId} FOR UPDATE`;
-
-      const challenge = await tx.challenge.findFirst({
-        where: {
-          id: challengeId,
-          deletedAt: null,
-        },
-        include: {
-          teams: {
-            where: {
-              deletedAt: null,
-            },
-            include: {
-              members: {
-                where: {
-                  deletedAt: null,
-                  status: {
-                    not: TeamMemberStatus.REMOVED,
-                  },
+    let advancedStatus = false;
+    const challenge = await this.prisma.challenge.findFirst({
+      where: {
+        id: challengeId,
+        deletedAt: null,
+      },
+      include: {
+        teams: {
+          where: {
+            deletedAt: null,
+          },
+          include: {
+            members: {
+              where: {
+                deletedAt: null,
+                status: {
+                  not: TeamMemberStatus.REMOVED,
                 },
               },
             },
           },
-          booking: true,
         },
-      });
-      if (!challenge) {
-        throw new NotFoundException('NOT_FOUND');
-      }
-      if (challenge.status !== ChallengeStatus.OPPONENT_REQUESTED) {
-        throw new ConflictException('CONFLICT');
-      }
+        booking: true,
+      },
+    });
+    if (!challenge) {
+      throw new NotFoundException('NOT_FOUND');
+    }
+    if (challenge.status !== ChallengeStatus.OPPONENT_REQUESTED) {
+      throw new ConflictException('CONFLICT');
+    }
 
-      const teamA = challenge.teams.find((team) => team.side === TeamSide.A);
-      const teamB = challenge.teams.find((team) => team.side === TeamSide.B);
-      if (!teamA || !teamB || teamA.captainUserId !== user.id) {
-        throw new ForbiddenException('FORBIDDEN');
-      }
+    const teamA = challenge.teams.find((team) => team.side === TeamSide.A);
+    const teamB = challenge.teams.find((team) => team.side === TeamSide.B);
+    if (!teamA || !teamB || teamA.captainUserId !== user.id) {
+      throw new ForbiddenException('FORBIDDEN');
+    }
 
-      const updated = await tx.challenge.update({
-        where: {
-          id: challenge.id,
-        },
-        data: {
-          status: ChallengeStatus.CONFIRMED,
-        },
-      });
+    const updateResult = await this.prisma.challenge.updateMany({
+      where: {
+        id: challenge.id,
+        status: ChallengeStatus.OPPONENT_REQUESTED,
+      },
+      data: {
+        status: ChallengeStatus.CONFIRMED,
+      },
+    });
+    if (updateResult.count !== 1) {
+      throw new ConflictException('CONFLICT');
+    }
+    advancedStatus = true;
 
-      await tx.booking.update({
-        where: {
-          id: challenge.booking.id,
-        },
-        data: {
-          status: BookingStatus.CONFIRMED,
-        },
-      });
-
-      const match = await tx.match.upsert({
-        where: {
-          challengeId: challenge.id,
-        },
-        create: {
-          challengeId: challenge.id,
-          status: MatchStatus.SCHEDULED,
-        },
-        update: {
-          status: MatchStatus.SCHEDULED,
-        },
-      });
-
-      const conversation = await tx.conversation.upsert({
-        where: {
-          challengeId: challenge.id,
-        },
-        create: {
-          type: ConversationType.CHALLENGE,
-          challengeId: challenge.id,
-          createdByUserId: user.id,
-          status: ConversationStatus.ACTIVE,
-        },
-        update: {
-          status: ConversationStatus.ACTIVE,
-        },
-      });
-
-      const participantIds = collectParticipantIds(challenge.teams);
-      if (participantIds.length > 0) {
-        await tx.conversationParticipant.createMany({
+    const matchId = randomUUID();
+    const conversationId = randomUUID();
+    const participantIds = collectParticipantIds(challenge.teams);
+    try {
+      const [updated, match, conversation] = await this.prisma.$transaction([
+        this.prisma.challenge.findUniqueOrThrow({
+          where: {
+            id: challenge.id,
+          },
+        }),
+        this.prisma.match.upsert({
+          where: {
+            challengeId: challenge.id,
+          },
+          create: {
+            id: matchId,
+            challengeId: challenge.id,
+            status: MatchStatus.SCHEDULED,
+          },
+          update: {
+            status: MatchStatus.SCHEDULED,
+          },
+        }),
+        this.prisma.conversation.upsert({
+          where: {
+            challengeId: challenge.id,
+          },
+          create: {
+            id: conversationId,
+            type: ConversationType.CHALLENGE,
+            challengeId: challenge.id,
+            createdByUserId: user.id,
+            status: ConversationStatus.ACTIVE,
+          },
+          update: {
+            status: ConversationStatus.ACTIVE,
+          },
+        }),
+        this.prisma.booking.update({
+          where: {
+            id: challenge.booking.id,
+          },
+          data: {
+            status: BookingStatus.CONFIRMED,
+          },
+        }),
+        this.prisma.conversationParticipant.createMany({
           data: participantIds.map((participantId) => ({
-            conversationId: conversation.id,
+            conversationId,
             userId: participantId,
           })),
           skipDuplicates: true,
-        });
-      }
+        }),
+      ]);
 
-      return {
+      const result = {
         challenge: updated,
         match,
         conversation,
       };
-    });
 
-    await this.clearLobbyCache();
-    await this.audit.log({
-      actorUserId: user.id,
-      action: 'challenge.confirm_opponent',
-      objectType: 'challenge',
-      objectId: result.challenge.id,
-      beforeJson: {
-        status: ChallengeStatus.OPPONENT_REQUESTED,
-      },
-      afterJson: {
-        status: result.challenge.status,
+      await this.clearLobbyCache();
+      await this.audit.log({
+        actorUserId: user.id,
+        action: 'challenge.confirm_opponent',
+        objectType: 'challenge',
+        objectId: result.challenge.id,
+        beforeJson: {
+          status: ChallengeStatus.OPPONENT_REQUESTED,
+        },
+        afterJson: {
+          status: result.challenge.status,
+          matchId: result.match.id,
+          conversationId: result.conversation.id,
+        },
+      });
+      this.metrics.incrementCounter('challenge_confirmed_total');
+      await this.chatGateway.emitConversationParticipants(result.conversation.id);
+
+      return {
         matchId: result.match.id,
         conversationId: result.conversation.id,
-      },
-    });
-    this.metrics.incrementCounter('challenge_confirmed_total');
-    await this.chatGateway.emitConversationParticipants(result.conversation.id);
-
-    return {
-      matchId: result.match.id,
-      conversationId: result.conversation.id,
-    };
+      };
+    } catch (error) {
+      if (advancedStatus) {
+        await this.prisma.challenge.updateMany({
+          where: {
+            id: challenge.id,
+            status: ChallengeStatus.CONFIRMED,
+          },
+          data: {
+            status: ChallengeStatus.OPPONENT_REQUESTED,
+          },
+        });
+      }
+      throw error;
+    }
   }
 
   async inviteToTeam(user: RequestUser, teamId: string, dto: InviteTeamMemberDto) {
@@ -1051,6 +1100,13 @@ export class ChallengesService {
 function isOverlapConstraintError(error: unknown): boolean {
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
     return error.code === 'P2004';
+  }
+  return false;
+}
+
+function isTeamAcceptConflictError(error: unknown): boolean {
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    return error.code === 'P2002';
   }
   return false;
 }
